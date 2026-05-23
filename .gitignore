@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# SQLite (含 WAL 临时文件)
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+
+# Node / Vite / TS
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+*.log
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Env
+.env
+.env.local
