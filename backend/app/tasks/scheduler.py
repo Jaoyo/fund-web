@@ -38,13 +38,13 @@ def start_scheduler() -> None:
         CronTrigger(
             day_of_week="mon-fri",
             hour=23,
-            minute=59,
+            minute=55,
         ),
         id="refresh_nav_fallback",
         replace_existing=True,
     )
     _scheduler.start()
-    log.info("scheduler started: refresh_nav at %d:%02d and 23:59 (Mon-Fri)",
+    log.info("scheduler started: refresh_nav at %d:%02d and 23:55 (Mon-Fri)",
              NAV_REFRESH_HOUR, NAV_REFRESH_MINUTE)
 
 

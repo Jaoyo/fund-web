@@ -107,6 +107,7 @@ const chartOption = computed(() => {
         data: profits,
         type: 'bar',
         yAxisIndex: 0,
+        barMaxWidth: 40, // 限制单根柱子的最大宽度，防止数据太少时过粗
         itemStyle: {
           color: (params: any) => {
             return params.value >= 0 ? '#ff4d4f' : '#52c41a'

@@ -72,18 +72,32 @@ async def get_quote(code: str) -> Quote | None:
     return quote
 
 
-def _is_cache_fresh(rows) -> bool:
-    """判断缓存是否足够新鲜：最新记录日期 >= 昨天即视为新鲜。"""
+def _is_cache_fresh(rows, expected_date: str | None = None) -> bool:
+    """判断缓存是否足够新鲜。"""
     if not rows:
         return False
     latest_date = rows[0]["date"]  # 已按 date DESC 排序
-    # 用北京时间判断（A 股市场时区）
+    
     beijing_now = datetime.now(timezone(timedelta(hours=8)))
+    today_str = beijing_now.strftime("%Y-%m-%d")
+
+    if expected_date:
+        if expected_date == today_str:
+            if beijing_now.hour >= 20:
+                # 到了交易日当晚 20 点以后，必须拿到当天的真实净值才算新鲜
+                return latest_date >= expected_date
+            # 还没到晚上 20 点，放行到兜底逻辑
+        else:
+            # 估值停留在过去（比如周末、节假日，或者是次日早盘前）
+            # 此时 expected_date 的净值早已公布，本地必须有
+            return latest_date >= expected_date
+
+    # 兜底逻辑：用北京时间判断，只要有昨天的数据就算新鲜
     yesterday = (beijing_now - timedelta(days=1)).strftime("%Y-%m-%d")
     return latest_date >= yesterday
 
 
-async def get_nav_history(code: str, days: int = 60) -> list[NavRecord]:
+async def get_nav_history(code: str, days: int = 60, expected_date: str | None = None) -> list[NavRecord]:
     """优先从 DB 读。数量不够则全量拉；数量够但不新鲜则增量补齐。"""
     with get_conn() as conn:
         rows = conn.execute(
@@ -94,7 +108,7 @@ async def get_nav_history(code: str, days: int = 60) -> list[NavRecord]:
         ).fetchall()
 
     has_enough = len(rows) >= days
-    fresh = _is_cache_fresh(rows)
+    fresh = _is_cache_fresh(rows, expected_date)
 
     # 快速路径：数据足够且新鲜，直接返回
     if has_enough and fresh:
@@ -149,7 +163,8 @@ async def refresh_all() -> tuple[int, int]:
 
     for code in codes:
         try:
-            records = await eastmoney.fetch_nav_history(code, page_size=30)
+            # 只拉最新 1 条净值（Quote 接口盘后 dwjz 不更新当天，必须用 NAV 接口）
+            records = await eastmoney.fetch_nav_history(code, page_size=1)
             _bulk_upsert_nav(code, records)
         except Exception:
             continue

@@ -12,7 +12,13 @@ router = APIRouter(prefix="/holdings", tags=["holdings"])
 
 @router.get("")
 async def list_holdings() -> dict:
-    """所有持仓汇总。聚合 transactions，按 fund_code 分组算份额/成本/收益。"""
+    """所有持仓汇总。"""
+    summary, _ = await _get_holdings_summary()
+    return ok(summary.model_dump())
+
+
+async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
+    """计算所有持仓汇总，并返回 (汇总数据, 当前最新的交易日)。"""
     with get_conn() as conn:
         codes = [
             r["code"]
@@ -31,6 +37,7 @@ async def list_holdings() -> dict:
     total_market = 0.0
     total_cost = 0.0
     total_today = 0.0
+    global_trade_day = ""
 
     from collections import defaultdict
     with get_conn() as conn:
@@ -62,40 +69,54 @@ async def list_holdings() -> dict:
             continue
 
         quote = await nav_cache.get_quote(code)
-        latest_nav = quote.nav if quote else 0.0
-        latest_date = quote.nav_date if quote else ""
-
-        market = profit.market_value(pos.shares, latest_nav)
-        gain, gain_rate = profit.total_profit(pos, latest_nav)
         
-        is_estimated = True
-        is_actual_published = False
-        if quote and quote.nav_date and quote.estimated_time:
-            if quote.nav_date == quote.estimated_time[:10]:
-                is_actual_published = True
-
-        if quote and quote.estimated_nav is not None and not is_actual_published:
-            today_p, today_r = profit.today_profit(
-                pos.shares, latest_nav, quote.estimated_nav
-            )
+        # 从估值时间提取当前交易日。如果未提供估算时间，则取当前日期。
+        if quote and quote.estimated_time:
+            current_trade_day = quote.estimated_time[:10]
         else:
-            is_estimated = False
-            navs = await nav_cache.get_nav_history(code, days=2)
-            if quote and len(navs) >= 1:
-                # 确定昨日净值：如果缓存首条是今天，则昨收为第二条；否则首条即为昨收
-                if navs[0].date == quote.nav_date:
-                    yest_nav = navs[1].nav if len(navs) > 1 else None
-                else:
-                    yest_nav = navs[0].nav
+            from datetime import datetime, timezone, timedelta
+            current_trade_day = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
 
-                if yest_nav:
-                    today_p, today_r = profit.actual_daily_profit(
-                        pos.shares, quote.nav, yest_nav
-                    )
-                else:
-                    today_p, today_r = None, None
+        if current_trade_day > global_trade_day:
+            global_trade_day = current_trade_day
+
+        navs = await nav_cache.get_nav_history(code, days=2, expected_date=current_trade_day)
+
+        is_actual_published = False
+        today_p = None
+        today_r = None
+        
+        if navs and navs[0].date >= current_trade_day:
+            # 历史净值表中已经包含了当天的真实净值 -> 已更新
+            is_actual_published = True
+            actual_latest_nav = navs[0].nav
+            latest_date = navs[0].date
+            yest_nav = navs[1].nav if len(navs) > 1 else None
+            
+            effective_nav = actual_latest_nav
+            
+            if yest_nav is not None:
+                today_p, today_r = profit.actual_daily_profit(pos.shares, actual_latest_nav, yest_nav)
+        else:
+            # 真实净值还未公布，使用盘中估算净值 -> 未更新
+            if navs:
+                actual_latest_nav = navs[0].nav
+                latest_date = navs[0].date
             else:
-                today_p, today_r = None, None
+                actual_latest_nav = quote.nav if quote else 0.0
+                latest_date = quote.nav_date if quote else ""
+                
+            if quote and quote.estimated_nav is not None:
+                effective_nav = quote.estimated_nav
+                today_p, today_r = profit.today_profit(pos.shares, actual_latest_nav, quote.estimated_nav)
+            else:
+                effective_nav = actual_latest_nav
+        
+        is_estimated = not is_actual_published
+        
+        # 市值和总收益基于 effective_nav 计算（已公布用真实，未公布用估算）
+        market = profit.market_value(pos.shares, effective_nav)
+        gain, gain_rate = profit.total_profit(pos, effective_nav)
 
         positions.append(
             Position(
@@ -110,7 +131,7 @@ async def list_holdings() -> dict:
                 today_profit=today_p,
                 today_profit_rate=today_r,
                 is_estimated=is_estimated,
-                latest_nav=latest_nav,
+                latest_nav=actual_latest_nav,
                 latest_nav_date=latest_date,
                 estimated_nav=quote.estimated_nav if quote else None,
                 estimated_growth=quote.estimated_growth if quote else None,
@@ -150,7 +171,11 @@ async def list_holdings() -> dict:
         update_status=update_status,
         positions=positions,
     )
-    return ok(summary.model_dump())
+    if not global_trade_day:
+        from datetime import datetime, timezone, timedelta
+        global_trade_day = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+        
+    return summary, global_trade_day
 
 
 @router.get("/history")
@@ -192,9 +217,16 @@ async def holdings_history(days: int = 30) -> dict:
 
     first_tx_date = min((t["date"] for t in tx_rows), default="9999-12-31")
 
+    # 提前获取今日的实时汇总数据，保证图表最后一天的点和顶部卡片一致
+    summary, global_trade_day = await _get_holdings_summary()
+
     history = []
     for i in range(1, len(dates)):
         today = dates[i]
+        
+        # 跳过等于或晚于当前交易日的历史数据，因为我们将在循环后手动用实时数据覆盖
+        if today >= global_trade_day:
+            continue
         
         # 只显示首笔交易生效之后的走势
         if today < first_tx_date:
@@ -235,8 +267,16 @@ async def holdings_history(days: int = 30) -> dict:
                 
         history.append({
             "date": today,
-            "profit": round(daily_profit, 4),
-            "cumulative_profit": round(cumulative_profit, 4)
+            "profit": round(daily_profit, 2),
+            "cumulative_profit": round(cumulative_profit, 2)
         })
-        
+
+    # 将今日实时的汇总数据追加到图表末尾
+    if global_trade_day:
+        history.append({
+            "date": global_trade_day,
+            "profit": round(summary.today_profit, 2),
+            "cumulative_profit": round(summary.total_profit, 2)
+        })
+
     return ok(history)
