@@ -47,7 +47,7 @@ async def fetch_quote(code: str) -> Optional[Quote]:
 
     m = _JSONP_RE.search(text)
     if not m:
-        raise BizError(5001, f"estimate quote 格式异常: {text[:80]}")
+        raise BizError(5002, f"estimate quote 格式异常: {text[:80]}")
 
     payload = json.loads(m.group(1))
     return Quote(
@@ -67,41 +67,60 @@ _PER_PAGE = 20  # 东财 lsjz 接口每页实际上限是 20，超过会被静�
 async def fetch_nav_history(
     code: str, page_size: int = 60, page_index: int = 1
 ) -> list[NavRecord]:
-    """历史净值。page_size 是想要的总条数，内部按 _PER_PAGE 分页拉。"""
+    """历史净值。page_size 是想要的总条数，内部按 _PER_PAGE 分页拉，支持并发加速。"""
     out: list[NavRecord] = []
-    remaining = page_size
-    cur_page = page_index
+    
+    import asyncio
+
+    async def _fetch_page(client: httpx.AsyncClient, p_idx: int) -> tuple[list[NavRecord], int]:
+        params = {"fundCode": code, "pageIndex": p_idx, "pageSize": _PER_PAGE}
+        resp = await client.get(EASTMONEY_NAV_URL, params=params)
+        resp.raise_for_status()
+        payload = resp.json()
+        items = (payload.get("Data") or {}).get("LSJZList") or []
+        records = []
+        for it in items:
+            records.append(
+                NavRecord(
+                    date=it["FSRQ"],
+                    nav=float(it["DWJZ"] or 0),
+                    accumulated_nav=_to_float(it.get("LJJZ")),
+                    growth_rate=_to_float(_strip_percent(it.get("JZZZL"))),
+                )
+            )
+        total = payload.get("TotalCount") or 0
+        return records, total
 
     async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
-        while remaining > 0:
-            params = {"fundCode": code, "pageIndex": cur_page, "pageSize": _PER_PAGE}
-            resp = await client.get(EASTMONEY_NAV_URL, params=params)
-            resp.raise_for_status()
-            payload = resp.json()
-            items = (payload.get("Data") or {}).get("LSJZList") or []
-            if not items:
-                break
-            for it in items:
-                out.append(
-                    NavRecord(
-                        date=it["FSRQ"],
-                        nav=float(it["DWJZ"] or 0),
-                        accumulated_nav=_to_float(it.get("LJJZ")),
-                        growth_rate=_to_float(_strip_percent(it.get("JZZZL"))),
-                    )
-                )
-            remaining -= len(items)
-            cur_page += 1
-            # 已拉到末尾
-            total = payload.get("TotalCount") or 0
-            if total and len(out) >= total:
-                break
+        # 先拉第一页，获取总数
+        first_page_records, total_count = await _fetch_page(client, page_index)
+        out.extend(first_page_records)
+        
+        if not first_page_records or len(out) >= page_size or len(out) >= total_count:
+            return out[:page_size]
+            
+        # 计算还需要拉取的页码
+        remaining_needed = min(page_size, total_count) - len(out)
+        pages_needed = (remaining_needed + _PER_PAGE - 1) // _PER_PAGE
+        
+        # 并发拉取剩余所有页
+        tasks = [
+            _fetch_page(client, page_index + i + 1)
+            for i in range(pages_needed)
+        ]
+        
+        # 并发执行并按顺序收集结果
+        results = await asyncio.gather(*tasks)
+        for records, _ in results:
+            out.extend(records)
+            
     return out[:page_size]
 
 
-async def fetch_fund_info(code: str) -> Fund:
+async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
     """基本信息。优先用 quote 的 name，否则解析 pingzhongdata。"""
-    quote = await fetch_quote(code)
+    if quote is None:
+        quote = await fetch_quote(code)
     if quote and quote.name:
         return Fund(code=code, name=quote.name)
 

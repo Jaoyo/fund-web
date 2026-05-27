@@ -30,11 +30,21 @@ def start_scheduler() -> None:
             hour=NAV_REFRESH_HOUR,
             minute=NAV_REFRESH_MINUTE,
         ),
-        id="refresh_nav",
+        id="refresh_nav_main",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        _refresh_nav_job,
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour=23,
+            minute=59,
+        ),
+        id="refresh_nav_fallback",
         replace_existing=True,
     )
     _scheduler.start()
-    log.info("scheduler started: refresh_nav at %d:%02d (Mon-Fri)",
+    log.info("scheduler started: refresh_nav at %d:%02d and 23:59 (Mon-Fri)",
              NAV_REFRESH_HOUR, NAV_REFRESH_MINUTE)
 
 
@@ -47,12 +57,13 @@ def stop_scheduler() -> None:
 
 async def _refresh_nav_job() -> None:
     try:
-        n = await nav_cache.refresh_all()
-        log.info("nav refresh done: %d funds", n)
+        n, sync_count = await nav_cache.refresh_all()
+        log.info("nav refresh done: %d funds, synced %d txs", n, sync_count)
     except Exception as e:
         log.exception("nav refresh failed: %s", e)
 
 
 async def trigger_refresh_now() -> int:
     """手动触发一次刷新（供 /api/v1/quotes/refresh 这类后续接口调用）。"""
-    return await nav_cache.refresh_all()
+    n, _ = await nav_cache.refresh_all()
+    return n

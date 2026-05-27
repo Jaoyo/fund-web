@@ -34,3 +34,7 @@ class Quote(BaseModel):
 class FundDetail(BaseModel):
     fund: Fund
     quote: Optional[Quote] = None
+
+
+class FundSortRequest(BaseModel):
+    codes: list[str] = Field(..., description="排好序的基金代码列表")

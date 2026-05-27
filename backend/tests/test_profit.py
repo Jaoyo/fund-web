@@ -98,3 +98,16 @@ def test_empty_transactions():
     assert pos.shares == 0
     assert pos.cost_amount == 0
     assert pos.realized_profit == 0
+
+
+def test_import_formula():
+    market_value = 10000.0
+    profit_val = 2000.0
+    latest_nav = 2.0
+    cost_amount = market_value - profit_val
+    shares = market_value / latest_nav
+    avg_cost = cost_amount / shares if shares > 0 else 0.0
+    
+    assert cost_amount == 8000.0
+    assert shares == 5000.0
+    assert avg_cost == 1.6

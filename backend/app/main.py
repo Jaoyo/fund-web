@@ -3,12 +3,13 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import ALLOWED_ORIGIN_REGEX, API_PREFIX
 from .db import init_db
+from .deps.auth import require_token
 from .response import (
     BizError,
     biz_error_handler,
@@ -44,11 +45,11 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_error_handler)
 app.add_exception_handler(Exception, unhandled_error_handler)
 
-app.include_router(funds.router, prefix=API_PREFIX)
-app.include_router(holdings.router, prefix=API_PREFIX)
-app.include_router(transactions.router, prefix=API_PREFIX)
-app.include_router(quotes.router, prefix=API_PREFIX)
-app.include_router(advice.router, prefix=API_PREFIX)
+app.include_router(funds.router, prefix=API_PREFIX, dependencies=[Depends(require_token)])
+app.include_router(holdings.router, prefix=API_PREFIX, dependencies=[Depends(require_token)])
+app.include_router(transactions.router, prefix=API_PREFIX, dependencies=[Depends(require_token)])
+app.include_router(quotes.router, prefix=API_PREFIX, dependencies=[Depends(require_token)])
+app.include_router(advice.router, prefix=API_PREFIX, dependencies=[Depends(require_token)])
 
 
 @app.get("/")

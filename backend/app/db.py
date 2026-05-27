@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS funds (
     code        TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
     type        TEXT,
+    sort_order  INTEGER NOT NULL DEFAULT 0,
     updated_at  TEXT NOT NULL
 );
 
@@ -66,6 +67,10 @@ def _connect() -> sqlite3.Connection:
 def init_db() -> None:
     with _connect() as conn:
         conn.executescript(SCHEMA)
+        try:
+            conn.execute("ALTER TABLE funds ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
         conn.commit()
 
 

@@ -2,6 +2,6 @@ import { apiGet } from './client'
 import type { FundAdvice } from '@/types'
 
 export const adviceApi = {
-  list: () => apiGet<FundAdvice[]>('/advice'),
-  detail: (code: string) => apiGet<FundAdvice | null>(`/advice/${code}`),
+  list: (days: number = 750) => apiGet<FundAdvice[]>(`/advice?days=${days}`),
+  detail: (code: string, days: number = 750) => apiGet<FundAdvice | null>(`/advice/${code}?days=${days}`),
 }

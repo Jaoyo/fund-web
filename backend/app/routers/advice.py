@@ -10,35 +10,41 @@ router = APIRouter(prefix="/advice", tags=["advice"])
 
 
 @router.get("")
-async def list_advice() -> dict:
+async def list_advice(days: int = 750) -> dict:
     """所有持仓基金的建议汇总。"""
     with get_conn() as conn:
         codes = [
-            r["fund_code"]
+            r["code"]
             for r in conn.execute(
-                "SELECT DISTINCT fund_code FROM transactions"
+                "SELECT f.code FROM funds f "
+                "JOIN (SELECT DISTINCT fund_code FROM transactions) t ON f.code = t.fund_code "
+                "ORDER BY f.sort_order ASC, f.code ASC"
             ).fetchall()
         ]
 
-    results = []
-    for code in codes:
-        advice = await _build_one(code)
-        if advice:
-            results.append(advice)
+    import asyncio
+    
+    tasks = [_build_one(code, days) for code in codes]
+    advices = await asyncio.gather(*tasks)
+    
+    results = [a for a in advices if a is not None]
+            
+    # 保证持仓的基金在前，未持仓（已清仓/仅关注）的基金在后，且内部保留原来的 sort_order
+    results.sort(key=lambda x: x["profit_rate"] is None)
     return ok(results)
 
 
 @router.get("/{code}")
-async def get_advice(code: str) -> dict:
+async def get_advice(code: str, days: int = 750) -> dict:
     """单基金详细指标。即使没持仓也能查（用于决定要不要建仓）。"""
-    advice = await _build_one(code)
+    advice = await _build_one(code, days)
     if advice is None:
         return ok(None)
     return ok(advice)
 
 
-async def _build_one(code: str) -> dict | None:
-    navs = await nav_cache.get_nav_history(code, days=750)
+async def _build_one(code: str, days: int) -> dict | None:
+    navs = await nav_cache.get_nav_history(code, days=days)
     if not navs:
         return None
 

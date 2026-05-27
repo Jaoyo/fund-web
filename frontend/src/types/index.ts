@@ -48,6 +48,7 @@ export interface Position {
   latest_nav_date: string
   estimated_nav: number | null
   estimated_growth: number | null
+  is_estimated: boolean
 }
 
 export interface HoldingsSummary {
@@ -56,7 +57,16 @@ export interface HoldingsSummary {
   total_profit: number
   total_profit_rate: number
   today_profit: number
+  today_profit_rate: number
+  is_estimated: boolean
+  update_status: 'estimated' | 'updating' | 'updated'
   positions: Position[]
+}
+
+export interface HoldingHistory {
+  date: string
+  profit: number
+  cumulative_profit: number
 }
 
 export interface Transaction {
@@ -77,10 +87,12 @@ export interface TransactionIn {
   client_id?: string
   fund_code: string
   date: string
-  type: 'buy' | 'sell'
-  nav: number
-  shares?: number
-  amount?: number
+  type: 'buy' | 'sell' | 'import'
+  nav?: number | null
+  shares?: number | null
+  amount?: number | null
+  profit?: number
+  fund_name?: string
   fee?: number
   note?: string
 }

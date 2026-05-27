@@ -1,17 +1,23 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { holdingsApi } from '@/api/holdings'
-import type { HoldingsSummary } from '@/types'
+import type { HoldingsSummary, HoldingHistory } from '@/types'
 
 export const useHoldingsStore = defineStore('holdings', () => {
   const summary = ref<HoldingsSummary | null>(null)
+  const history = ref<HoldingHistory[]>([])
   const loading = ref(false)
   let timer: number | null = null
 
   async function refresh() {
     loading.value = true
     try {
-      summary.value = await holdingsApi.summary()
+      const [s, h] = await Promise.all([
+        holdingsApi.summary(),
+        holdingsApi.history(30)
+      ])
+      summary.value = s
+      history.value = h
     } finally {
       loading.value = false
     }
@@ -30,5 +36,5 @@ export const useHoldingsStore = defineStore('holdings', () => {
     }
   }
 
-  return { summary, loading, refresh, startPolling, stopPolling }
+  return { summary, history, loading, refresh, startPolling, stopPolling }
 })

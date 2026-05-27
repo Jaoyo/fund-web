@@ -6,15 +6,17 @@ from pydantic import BaseModel, Field
 
 
 class TransactionIn(BaseModel):
-    """录入交易。amount 和 shares 至少给一个，缺的那个由 nav 算出。"""
+    """录入交易。amount 和 shares 至少给一个，缺的那个由 nav 算出。如果都不提供或 nav 未知，则进入待确认状态。"""
 
     client_id: Optional[str] = Field(None, description="幂等 ID，可选")
     fund_code: str
     date: str = Field(..., description="YYYY-MM-DD")
-    type: Literal["buy", "sell"]
-    nav: float = Field(..., gt=0, description="成交净值")
+    type: Literal["buy", "sell", "import"]
+    nav: Optional[float] = Field(None, gt=0, description="成交净值，为 null 时自动判定是否待确认")
     shares: Optional[float] = Field(None, gt=0)
     amount: Optional[float] = Field(None, gt=0)
+    profit: Optional[float] = Field(None, description="当前累计收益，仅用于导入旧持仓")
+    fund_name: Optional[str] = Field(None, description="基金名称，仅用于导入旧持仓时可选输入")
     fee: float = Field(0, ge=0)
     note: Optional[str] = None
 
@@ -44,8 +46,9 @@ class Position(BaseModel):
     market_value: float = Field(..., description="当前市值 = shares × latest_nav")
     profit: float = Field(..., description="累计收益")
     profit_rate: float = Field(..., description="累计收益率")
-    today_profit: Optional[float] = Field(None, description="今日预估收益")
-    today_profit_rate: Optional[float] = Field(None, description="今日预估收益率")
+    today_profit: Optional[float] = Field(None, description="今日收益金额")
+    today_profit_rate: Optional[float] = Field(None, description="今日收益率")
+    is_estimated: bool = Field(True, description="为 true 表示今日收益是基于估算的；false 表示是盘后实际确认的")
     latest_nav: float
     latest_nav_date: str
     estimated_nav: Optional[float] = None
@@ -58,4 +61,7 @@ class HoldingsSummary(BaseModel):
     total_profit: float
     total_profit_rate: float
     today_profit: float
+    today_profit_rate: float
+    is_estimated: bool = True
+    update_status: Literal["estimated", "updating", "updated"] = "estimated"
     positions: list[Position]
