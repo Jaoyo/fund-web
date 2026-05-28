@@ -17,12 +17,12 @@ defineProps<{ signal: AdviceSignal }>()
 .advice-chip {
   display: inline-flex;
   align-items: center;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
   font-weight: 500;
   margin: 4px 8px 4px 0;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   border: 1px solid transparent;
 }
 
@@ -30,19 +30,19 @@ defineProps<{ signal: AdviceSignal }>()
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  margin-right: 8px;
+  margin-right: 6px;
   display: inline-block;
 }
 
 .title {
   font-weight: 700;
-  margin-right: 6px;
+  margin-right: 4px;
 }
 
 .divider {
   width: 1px;
   height: 10px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.12);
   margin-right: 6px;
 }
 
@@ -50,49 +50,46 @@ defineProps<{ signal: AdviceSignal }>()
   opacity: 0.9;
 }
 
-/* buy (买入建议 - 翠绿) */
+/* buy (买入建议 - 币安红) */
 .buy {
-  background: rgba(16, 185, 129, 0.1) !important;
-  color: #34d399 !important;
-  border-color: rgba(16, 185, 129, 0.25) !important;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+  background: rgba(246, 70, 93, 0.08) !important;
+  color: #f6465d !important;
+  border-color: rgba(246, 70, 93, 0.2) !important;
 }
 .buy .indicator-dot {
-  background-color: #10b981;
-  box-shadow: 0 0 8px #10b981;
+  background-color: #f6465d;
+  box-shadow: 0 0 6px #f6465d;
 }
 
-/* sell (卖出建议 - 珊瑚粉红) */
+/* sell (卖出建议 - 币安绿) */
 .sell {
-  background: rgba(244, 63, 94, 0.1) !important;
-  color: #fb7185 !important;
-  border-color: rgba(244, 63, 94, 0.25) !important;
-  box-shadow: 0 0 10px rgba(244, 63, 94, 0.05);
+  background: rgba(14, 203, 129, 0.08) !important;
+  color: #0ecb81 !important;
+  border-color: rgba(14, 203, 129, 0.2) !important;
 }
 .sell .indicator-dot {
-  background-color: #f43f5e;
-  box-shadow: 0 0 8px #f43f5e;
+  background-color: #0ecb81;
+  box-shadow: 0 0 6px #0ecb81;
 }
 
 /* watch (预警关注 - 琥珀黄) */
 .watch {
-  background: rgba(245, 158, 11, 0.1) !important;
+  background: rgba(245, 158, 11, 0.08) !important;
   color: #fbbf24 !important;
-  border-color: rgba(245, 158, 11, 0.25) !important;
-  box-shadow: 0 0 10px rgba(245, 158, 11, 0.05);
+  border-color: rgba(245, 158, 11, 0.2) !important;
 }
 .watch .indicator-dot {
   background-color: #f59e0b;
-  box-shadow: 0 0 8px #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
 }
 
 /* info (中性持有 - 灰蓝) */
 .info {
   background: rgba(148, 163, 184, 0.08) !important;
-  color: #cbd5e1 !important;
-  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: #eaecef !important;
+  border-color: rgba(148, 163, 184, 0.15) !important;
 }
 .info .indicator-dot {
-  background-color: #94a3b8;
+  background-color: #929aa5;
 }
 </style>

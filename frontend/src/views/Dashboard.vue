@@ -138,9 +138,9 @@ onBeforeUnmount(() => store.stopPolling())
 }
 .page-title-bar h2 {
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 700;
   margin: 0 0 4px;
-  color: var(--el-text-color-primary);
+  color: #ffffff;
   letter-spacing: -0.5px;
 }
 .subtitle {
@@ -154,8 +154,8 @@ onBeforeUnmount(() => store.stopPolling())
 }
 .title-text {
   font-weight: 700;
-  font-size: 16px;
-  color: var(--el-text-color-primary);
+  font-size: 20px;
+  color: #ffffff;
 }
 .title-text .count {
   font-size: 13px;
@@ -176,5 +176,30 @@ onBeforeUnmount(() => store.stopPolling())
   opacity: 0.4;
   background-color: var(--el-fill-color-light);
   border: 1px dashed var(--el-color-primary) !important;
+}
+
+/* 移动端响应式适配 */
+@media (max-width: 768px) {
+  .dashboard {
+    margin: 8px auto 24px;
+    padding: 0 4px;
+  }
+  .page-title-bar {
+    margin-bottom: 16px;
+  }
+  .page-title-bar h2 {
+    font-size: 20px;
+  }
+  .section-title {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .actions {
+    justify-content: flex-end;
+  }
+  .holdings {
+    margin-top: 24px;
+  }
 }
 </style>

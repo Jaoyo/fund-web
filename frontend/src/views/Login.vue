@@ -13,6 +13,7 @@
         show-password
         clearable
         @keyup.enter="handleLogin"
+        class="login-input"
       />
       <el-button
         type="primary"
@@ -76,21 +77,19 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(ellipse at top, rgba(99, 102, 241, 0.08), transparent 60%),
-    var(--el-bg-color-page);
+  background: radial-gradient(ellipse at top, rgba(252, 213, 53, 0.03), transparent 60%), #0b0e11;
 }
 .login-card {
-  width: 360px;
-  padding: 40px 32px;
+  width: 90%;
+  max-width: 360px;
+  padding: 32px 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  background: rgba(13, 18, 30, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 20px;
+  background-color: #1e2329;
+  border: 1px solid #2b3139;
   border-radius: 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  box-sizing: border-box;
 }
 .brand-block {
   display: flex;
@@ -100,22 +99,31 @@ async function handleLogin() {
 }
 .brand {
   font-weight: 800;
-  font-size: 28px;
+  font-size: 26px;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 50%, #3b82f6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #fcd535;
 }
 .subtitle {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: #929aa5;
 }
 .login-btn {
   width: 100%;
 }
 .hint {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  color: #707a8a;
   text-align: center;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    padding: 24px 20px;
+    gap: 16px;
+  }
+  .brand {
+    font-size: 24px;
+  }
 }
 </style>

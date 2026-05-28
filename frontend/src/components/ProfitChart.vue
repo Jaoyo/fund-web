@@ -38,21 +38,23 @@ const chartOption = computed(() => {
   const cumulativeProfits = props.data.map(item => item.cumulative_profit)
 
   return {
+    backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      textStyle: { color: '#333' },
-      borderColor: '#e5e7eb',
+      backgroundColor: '#1e2329',
+      textStyle: { color: '#eaecef', fontSize: 12 },
+      borderColor: '#2b3139',
       borderWidth: 1,
+      extraCssText: 'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); border-radius: 4px;',
       formatter: (params: any) => {
-        let res = `<div style="font-size: 13px; font-weight: 500; margin-bottom: 4px;">${props.data[params[0].dataIndex].date}</div>`
+        let res = `<div style="font-size: 12px; color: #929aa5; margin-bottom: 4px; font-family: monospace;">${props.data[params[0].dataIndex].date}</div>`
         params.forEach((item: any) => {
           const val = item.value
-          const color = val >= 0 ? '#ef4444' : '#22c55e'
+          const color = val >= 0 ? '#f6465d' : '#0ecb81' // 红涨绿跌
           const sign = val >= 0 ? '+' : ''
-          res += `<div style="margin-top: 4px; color: #6b7280; font-size: 12px; display: flex; align-items: center;">
-                    ${item.marker} <span style="margin-right: 8px;">${item.seriesName}:</span> 
-                    <span style="color: ${color}; font-weight: bold; font-size: 13px;">${sign}${val.toFixed(2)}</span>
+          res += `<div style="margin-top: 4px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                    <span style="color: #929aa5; display: flex; align-items: center; gap: 4px;">${item.marker} ${item.seriesName}:</span> 
+                    <span style="color: ${color}; font-weight: bold; font-family: monospace;">${sign}${val.toFixed(2)}</span>
                   </div>`
         })
         return res
@@ -60,14 +62,15 @@ const chartOption = computed(() => {
     },
     legend: {
       data: ['每日收益', '累计收益'],
-      textStyle: { color: 'var(--el-text-color-regular)' },
-      top: 0
+      textStyle: { color: '#929aa5', fontSize: 11 },
+      top: 0,
+      right: 'center'
     },
     grid: {
-      left: '3%',
-      right: '3%',
-      bottom: '3%',
-      top: '30px',
+      left: '2%',
+      right: '2%',
+      bottom: '2%',
+      top: '35px',
       containLabel: true
     },
     xAxis: {
@@ -75,11 +78,11 @@ const chartOption = computed(() => {
       data: dates,
       axisLine: {
         lineStyle: {
-          color: 'rgba(150, 150, 150, 0.3)'
+          color: '#2b3139'
         }
       },
       axisLabel: {
-        color: 'rgba(150, 150, 150, 0.8)',
+        color: '#707a8a',
         fontSize: 10
       }
     },
@@ -87,18 +90,18 @@ const chartOption = computed(() => {
       {
         type: 'value',
         name: '每日',
-        nameTextStyle: { color: 'rgba(150, 150, 150, 0.8)', fontSize: 10 },
+        nameTextStyle: { color: '#707a8a', fontSize: 9 },
         splitLine: {
-          lineStyle: { color: 'rgba(150, 150, 150, 0.15)', type: 'dashed' }
+          lineStyle: { color: '#20262d', type: 'dashed' }
         },
-        axisLabel: { color: 'rgba(150, 150, 150, 0.8)', fontSize: 10 }
+        axisLabel: { color: '#707a8a', fontSize: 9 }
       },
       {
         type: 'value',
         name: '累计',
-        nameTextStyle: { color: 'rgba(150, 150, 150, 0.8)', fontSize: 10 },
+        nameTextStyle: { color: '#707a8a', fontSize: 9 },
         splitLine: { show: false },
-        axisLabel: { color: 'rgba(150, 150, 150, 0.8)', fontSize: 10 }
+        axisLabel: { color: '#707a8a', fontSize: 9 }
       }
     ],
     series: [
@@ -107,10 +110,10 @@ const chartOption = computed(() => {
         data: profits,
         type: 'bar',
         yAxisIndex: 0,
-        barMaxWidth: 40, // 限制单根柱子的最大宽度，防止数据太少时过粗
+        barMaxWidth: 16, 
         itemStyle: {
           color: (params: any) => {
-            return params.value >= 0 ? '#ff4d4f' : '#52c41a'
+            return params.value >= 0 ? '#f6465d' : '#0ecb81' // 红涨绿跌
           },
           borderRadius: [2, 2, 0, 0]
         }
@@ -122,8 +125,8 @@ const chartOption = computed(() => {
         yAxisIndex: 1,
         smooth: true,
         showSymbol: false,
-        lineStyle: { width: 3, color: '#3b82f6' },
-        itemStyle: { color: '#3b82f6' }
+        lineStyle: { width: 2.5, color: '#fcd535' }, // 币安黄折线
+        itemStyle: { color: '#fcd535' }
       }
     ]
   }
@@ -133,23 +136,35 @@ const chartOption = computed(() => {
 <style scoped>
 .profit-chart-card {
   margin-bottom: 24px;
-  border-radius: 12px;
-  border: none;
+  border-radius: 8px;
+  border: 1px solid #2b3139 !important;
+  background-color: #1e2329 !important;
+  box-shadow: none !important;
 }
 .chart-header {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 .title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: #ffffff;
 }
 .chart-container {
-  height: 250px;
+  height: 240px;
   width: 100%;
 }
 .chart {
   height: 100%;
   width: 100%;
+}
+
+@media (max-width: 768px) {
+  .profit-chart-card {
+    padding: 12px 8px !important;
+    margin-bottom: 16px;
+  }
+  .chart-container {
+    height: 200px;
+  }
 }
 </style>

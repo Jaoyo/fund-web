@@ -3,14 +3,14 @@
     <div class="row top">
       <div class="name-container">
         <span class="name">{{ position.fund_name }}</span>
-        <span class="code">{{ position.fund_code }}</span>
+        <span class="code font-number">{{ position.fund_code }}</span>
         <el-tag 
           v-if="!position.is_estimated" 
           size="small" 
           type="success" 
           effect="plain" 
           round 
-          style="margin-left: 6px; padding: 0 4px; height: 18px; line-height: 16px; font-size: 10px;"
+          style="margin-left: 6px; padding: 0 4px; height: 18px; line-height: 16px; font-size: 10px; border-color: rgba(14, 203, 129, 0.3); color: #0ecb81; background: rgba(14, 203, 129, 0.1);"
         >
           已更新
         </el-tag>
@@ -21,7 +21,7 @@
     <div class="row metrics">
       <div class="metric-item">
         <div class="label">当前市值</div>
-        <div class="value market-val">¥{{ formatMoney(position.market_value) }}</div>
+        <div class="value market-val font-number">¥{{ formatMoney(position.market_value) }}</div>
       </div>
       <div class="metric-item">
         <div class="label">累计收益</div>
@@ -65,49 +65,83 @@ function goDetail() {
 <style scoped>
 .holding-card {
   margin-bottom: 16px;
-  padding: 8px 12px;
-  transition: all 0.3s ease;
+  padding: 12px 16px;
+  background-color: #1e2329 !important;
+  border: 1px solid #2b3139 !important;
+  transition: all 0.2s ease;
 }
 .holding-card.is-clickable {
   cursor: pointer;
 }
+.holding-card.is-clickable:hover {
+  border-color: #707a8a !important;
+}
 .holding-card.is-sorting {
   cursor: grab;
-  border-color: var(--el-color-primary-light-5);
+  border-color: var(--el-color-primary) !important;
 }
 .holding-card.is-sorting:active {
   cursor: grabbing;
 }
 .row { display: flex; align-items: center; }
-.top { justify-content: space-between; margin-bottom: 16px; }
-.name-container { display: flex; align-items: baseline; gap: 8px; }
-.name { font-weight: 700; font-size: 17px; color: var(--el-text-color-primary); }
-.code { color: var(--el-text-color-secondary); font-size: 13px; font-family: var(--font-sans); }
-.arrow-icon { color: var(--el-text-color-secondary); opacity: 0.5; transition: transform 0.3s ease; }
-.holding-card.is-clickable:hover .arrow-icon { transform: translateX(3px); opacity: 1; color: var(--el-color-primary-light-3); }
-.drag-handle { color: var(--el-text-color-secondary); font-size: 18px; cursor: grab; }
+.top { justify-content: space-between; margin-bottom: 14px; }
+.name-container { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.name { font-weight: 700; font-size: 18px; color: #ffffff; }
+.code { color: #929aa5; font-size: 13px; }
+.arrow-icon { color: #707a8a; opacity: 0.5; transition: transform 0.2s ease; }
+.holding-card.is-clickable:hover .arrow-icon { transform: translateX(3px); opacity: 1; color: var(--el-color-primary); }
+.drag-handle { color: #929aa5; font-size: 18px; cursor: grab; }
 
-
-.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .metric-item { display: flex; flex-direction: column; gap: 4px; }
-.metrics .label { font-size: 12px; color: var(--el-text-color-secondary); font-weight: 500; }
-.metrics .value { font-size: 18px; font-weight: 700; font-family: var(--font-sans); }
-.market-val { color: var(--el-text-color-primary); }
-.rate { font-size: 12px; margin-left: 4px; font-weight: 600; }
-.muted { color: var(--el-text-color-secondary); font-weight: normal !important; }
+.metrics .label { font-size: 13px; color: #707a8a; font-weight: 500; }
+.metrics .value { font-size: 18px; font-weight: 700; }
+.market-val { color: #ffffff; }
+.rate { font-size: 12px; margin-left: 2px; font-weight: 600; }
+.muted { color: #707a8a; font-weight: normal !important; }
 
 .footer {
-  margin-top: 18px; gap: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  margin-top: 16px; gap: 8px;
+  border-top: 1px solid #20262d;
   padding-top: 12px;
+  flex-wrap: wrap;
 }
 .badge {
-  font-size: 11px;
-  color: var(--el-text-color-regular);
-  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+  color: #eaecef;
+  background: #2b3139;
   padding: 3px 8px;
   border-radius: 6px;
-  font-family: var(--font-sans);
-  border: 1px solid rgba(255, 255, 255, 0.02);
+  font-family: var(--font-number);
+  border: 1px solid #20262d;
+}
+
+/* 手机端响应式适配 */
+@media (max-width: 768px) {
+  .holding-card {
+    padding: 8px 12px !important;
+  }
+  .name {
+    font-size: 15px;
+  }
+  .metrics {
+    gap: 8px;
+  }
+  .metrics .value {
+    font-size: 14px;
+  }
+  .rate {
+    font-size: 10px;
+    margin-left: 1px;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+  .footer {
+    margin-top: 12px;
+    padding-top: 10px;
+    gap: 6px;
+  }
 }
 </style>
