@@ -8,6 +8,7 @@ import json
 import re
 from typing import Optional
 
+import asyncio
 import httpx
 
 from ..config import (
@@ -26,6 +27,7 @@ import time
 logger = logging.getLogger("fund.eastmoney")
 
 _client: httpx.AsyncClient | None = None
+_SEMAPHORE = asyncio.Semaphore(5)
 
 
 def get_client() -> httpx.AsyncClient:
@@ -63,7 +65,8 @@ async def fetch_quote(code: str) -> Optional[Quote]:
     t0 = time.time()
     try:
         client = get_client()
-        resp = await client.get(url)
+        async with _SEMAPHORE:
+            resp = await client.get(url)
         resp.raise_for_status()
         text = resp.text.strip()
         elapsed = time.time() - t0
@@ -97,20 +100,19 @@ _PER_PAGE = 20  # 东财 lsjz 接口每页实际上限是 20，超过会被静�
 
 async def fetch_nav_history(
     code: str, page_size: int = 60, page_index: int = 1
-) -> list[NavRecord]:
+) -> tuple[list[NavRecord], int]:
     """历史净值。page_size 是想要的总条数，内部按 _PER_PAGE 分页拉，支持并发加速。"""
     logger.info("fetch_nav_history: start fetching history for fund %s, page_size: %d", code, page_size)
     t0 = time.time()
     out: list[NavRecord] = []
     
-    import asyncio
-
     async def _fetch_page(client: httpx.AsyncClient, p_idx: int) -> tuple[list[NavRecord], int]:
         params = {"fundCode": code, "pageIndex": p_idx, "pageSize": _PER_PAGE}
         t_page_0 = time.time()
         logger.info("fetch_nav_history: requesting page %d for fund %s", p_idx, code)
         try:
-            resp = await client.get(EASTMONEY_NAV_URL, params=params)
+            async with _SEMAPHORE:
+                resp = await client.get(EASTMONEY_NAV_URL, params=params)
             resp.raise_for_status()
             logger.info("fetch_nav_history: page %d success for fund %s, elapsed: %.3fs", p_idx, code, time.time() - t_page_0)
         except Exception as ex:
@@ -139,7 +141,7 @@ async def fetch_nav_history(
     if not first_page_records or len(out) >= page_size or len(out) >= total_count:
         res = out[:page_size]
         logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
-        return res
+        return res, total_count
         
     # 计算还需要拉取的页码
     remaining_needed = min(page_size, total_count) - len(out)
@@ -158,7 +160,7 @@ async def fetch_nav_history(
         
     res = out[:page_size]
     logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
-    return res
+    return res, total_count
 
 
 async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
@@ -173,7 +175,8 @@ async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
     t0 = time.time()
     try:
         client = get_client()
-        resp = await client.get(url)
+        async with _SEMAPHORE:
+            resp = await client.get(url)
         resp.raise_for_status()
         text = resp.text
         logger.info("fetch_fund_info: details fetched success for fund %s, elapsed: %.3fs", code, time.time() - t0)

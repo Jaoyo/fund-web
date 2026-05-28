@@ -56,7 +56,7 @@ async def get_advice(code: str, days: int = 750) -> dict:
 async def _build_one(code: str, days: int) -> dict | None:
     t_build_start = time.time()
     logger.info("_build_one: start computing for fund %s, days=%d", code, days)
-    navs = await nav_cache.get_nav_history(code, days=days)
+    navs = await nav_cache.get_nav_history(code, days=days, background_fetch=True)
     if not navs:
         logger.info("_build_one: empty nav history for fund %s, skip", code)
         return None

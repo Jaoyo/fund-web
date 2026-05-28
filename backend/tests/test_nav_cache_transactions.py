@@ -69,7 +69,8 @@ def test_throttled_nav_history_still_fetches_when_cache_has_too_few_days(monkeyp
         async def fake_fetch_nav_history(fetch_code: str, page_size: int, page_index: int = 1):
             assert fetch_code == code
             assert page_size >= 30
-            return [NavRecord(date=f"2026-05-{day:02d}", nav=1.0 + day / 100) for day in range(26, 16, -1)]
+            records = [NavRecord(date=f"2026-05-{day:02d}", nav=1.0 + day / 100) for day in range(26, 16, -1)]
+            return records, 100
 
         monkeypatch.setattr(nav_cache.eastmoney, "fetch_nav_history", fake_fetch_nav_history)
 
@@ -139,3 +140,68 @@ def test_create_transaction_idempotent_hit_returns_before_external_calls(monkeyp
     assert resp["code"] == 0
     assert resp["message"] == "idempotent hit"
     assert resp["data"]["client_id"] == "same-client-id"
+
+
+def test_get_nav_history_background_fetch(monkeypatch, tmp_path):
+    with _patched_db(monkeypatch, tmp_path):
+        code = "000003"
+        # 预先插入 5 条净值数据
+        _insert_nav(
+            code,
+            [NavRecord(date=f"2026-05-{day:02d}", nav=1.0) for day in range(5, 0, -1)],
+        )
+
+        bg_called = []
+
+        async def fake_fetch_nav_history(fetch_code: str, page_size: int, page_index: int = 1):
+            bg_called.append((fetch_code, page_size))
+            return [NavRecord(date="2026-05-06", nav=1.1)], 10
+
+        monkeypatch.setattr(nav_cache.eastmoney, "fetch_nav_history", fake_fetch_nav_history)
+
+        # 1. 触发后台拉取（数据天数 5 < 10，且 background_fetch=True）
+        rows = asyncio.run(nav_cache.get_nav_history(code, days=10, background_fetch=True))
+        # 期望：立刻返回本地的 5 条，不阻塞
+        assert len(rows) == 5
+
+        # 运行事件循环让后台任务得以启动并执行
+        async def run_loop():
+            await asyncio.sleep(0.05)
+
+        asyncio.run(run_loop())
+
+        # 检查后台任务是否被成功调用
+        assert len(bg_called) == 1
+        assert bg_called[0] == (code, 60)
+
+
+def test_get_nav_history_new_fund_adaptation(monkeypatch, tmp_path):
+    with _patched_db(monkeypatch, tmp_path):
+        code = "000004"
+        called_count = 0
+        called_sizes = []
+
+        async def fake_fetch_nav_history(fetch_code: str, page_size: int, page_index: int = 1):
+            nonlocal called_count
+            called_count += 1
+            called_sizes.append(page_size)
+            records = [NavRecord(date=f"2026-05-{day:02d}", nav=1.0) for day in range(5, 0, -1)]
+            return records, 5
+
+        monkeypatch.setattr(nav_cache.eastmoney, "fetch_nav_history", fake_fetch_nav_history)
+
+        # 1. 首次全量同步：本地为空，同步拉取
+        rows = asyncio.run(nav_cache.get_nav_history(code, days=10))
+        assert len(rows) == 5
+        assert called_count == 1
+        assert called_sizes[0] == 60  # max(10, 60)
+        assert nav_cache._fund_total_count[code] == 5
+
+        # 2. 第二次拉取：本地已有 5 条，days 请求 10 条
+        # 虽然本地天数(5)仍然小于请求天数(10)，但因为已经和东财总数(5)一致，
+        # has_enough 应自适应判定为 True，所以仅触发增量同步拉取，page_size 为 10
+        nav_cache._nav_refresh_ts[code] = 0.0  # 绕过时间节流
+        rows2 = asyncio.run(nav_cache.get_nav_history(code, days=10))
+        assert len(rows2) == 5
+        assert called_count == 2
+        assert called_sizes[1] == 10  # _INCREMENTAL_FETCH_SIZE
