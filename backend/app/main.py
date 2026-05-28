@@ -34,6 +34,8 @@ async def lifespan(app: FastAPI):
     start_scheduler()
     yield
     stop_scheduler()
+    from .services import eastmoney
+    await eastmoney.close_client()
 
 
 app = FastAPI(title="fund-web API", version="0.1.0", lifespan=lifespan)

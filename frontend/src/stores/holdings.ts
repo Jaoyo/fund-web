@@ -17,7 +17,17 @@ export const useHoldingsStore = defineStore('holdings', () => {
         holdingsApi.history(30)
       ])
       summary.value = s
-      history.value = h
+      if (s && h) {
+        const combined = h.filter(item => item.date < s.trade_date)
+        combined.push({
+          date: s.trade_date,
+          profit: Number(s.today_profit.toFixed(2)),
+          cumulative_profit: Number(s.total_profit.toFixed(2))
+        })
+        history.value = combined
+      } else {
+        history.value = h
+      }
     } finally {
       loading.value = false
     }

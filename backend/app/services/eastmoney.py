@@ -25,6 +25,23 @@ import time
 
 logger = logging.getLogger("fund.eastmoney")
 
+_client: httpx.AsyncClient | None = None
+
+
+def get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS)
+    return _client
+
+
+async def close_client() -> None:
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+        _client = None
+
+
 _HEADERS = {
     "Referer": EASTMONEY_REFERER,
     "User-Agent": (
@@ -45,10 +62,10 @@ async def fetch_quote(code: str) -> Optional[Quote]:
     logger.info("fetch_quote: start requesting quote for fund %s, url: %s", code, url)
     t0 = time.time()
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            text = resp.text.strip()
+        client = get_client()
+        resp = await client.get(url)
+        resp.raise_for_status()
+        text = resp.text.strip()
         elapsed = time.time() - t0
         logger.info("fetch_quote: request success for fund %s, elapsed: %.3fs", code, elapsed)
     except Exception as e:
@@ -114,31 +131,31 @@ async def fetch_nav_history(
         total = payload.get("TotalCount") or 0
         return records, total
 
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
-        # 先拉第一页，获取总数
-        first_page_records, total_count = await _fetch_page(client, page_index)
-        out.extend(first_page_records)
+    client = get_client()
+    # 先拉第一页，获取总数
+    first_page_records, total_count = await _fetch_page(client, page_index)
+    out.extend(first_page_records)
+    
+    if not first_page_records or len(out) >= page_size or len(out) >= total_count:
+        res = out[:page_size]
+        logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
+        return res
         
-        if not first_page_records or len(out) >= page_size or len(out) >= total_count:
-            res = out[:page_size]
-            logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
-            return res
-            
-        # 计算还需要拉取的页码
-        remaining_needed = min(page_size, total_count) - len(out)
-        pages_needed = (remaining_needed + _PER_PAGE - 1) // _PER_PAGE
+    # 计算还需要拉取的页码
+    remaining_needed = min(page_size, total_count) - len(out)
+    pages_needed = (remaining_needed + _PER_PAGE - 1) // _PER_PAGE
+    
+    # 并发拉取剩余所有页
+    tasks = [
+        _fetch_page(client, page_index + i + 1)
+        for i in range(pages_needed)
+    ]
+    
+    # 并发执行并按顺序收集结果
+    results = await asyncio.gather(*tasks)
+    for records, _ in results:
+        out.extend(records)
         
-        # 并发拉取剩余所有页
-        tasks = [
-            _fetch_page(client, page_index + i + 1)
-            for i in range(pages_needed)
-        ]
-        
-        # 并发执行并按顺序收集结果
-        results = await asyncio.gather(*tasks)
-        for records, _ in results:
-            out.extend(records)
-            
     res = out[:page_size]
     logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
     return res
@@ -155,10 +172,10 @@ async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
     logger.info("fetch_fund_info: start fetching details for fund %s from %s", code, url)
     t0 = time.time()
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            text = resp.text
+        client = get_client()
+        resp = await client.get(url)
+        resp.raise_for_status()
+        text = resp.text
         logger.info("fetch_fund_info: details fetched success for fund %s, elapsed: %.3fs", code, time.time() - t0)
     except Exception as e:
         logger.error("fetch_fund_info: details fetch failed for fund %s, elapsed: %.3fs, error: %s", code, time.time() - t0, e)

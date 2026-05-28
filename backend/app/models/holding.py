@@ -65,3 +65,4 @@ class HoldingsSummary(BaseModel):
     is_estimated: bool = True
     update_status: Literal["estimated", "updating", "updated"] = "estimated"
     positions: list[Position]
+    trade_date: str = Field(..., description="当前最新交易日")

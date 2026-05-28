@@ -61,6 +61,7 @@ export interface HoldingsSummary {
   is_estimated: boolean
   update_status: 'estimated' | 'updating' | 'updated'
   positions: Position[]
+  trade_date: string
 }
 
 export interface HoldingHistory {

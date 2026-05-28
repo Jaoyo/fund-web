@@ -61,10 +61,11 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
 
     logger.info("_get_holdings_summary: DB query finished. Active funds: %d. Transaction rows: %d. Elapsed: %.3fs", len(codes), len(all_tx_rows), time.time() - t_start)
 
+    # 1. 过滤有仓位的活跃持仓，并算好持仓份额
+    active_codes = []
+    positions_calc = {}
     for code in codes:
-        t_code_start = time.time()
         tx_rows = txs_by_fund.get(code, [])
-
         txs = [
             profit.TxRow(
                 date=r["date"],
@@ -79,21 +80,47 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
         pos = profit.compute_position(txs)
         if pos.shares <= 1e-6:
             continue
+        active_codes.append(code)
+        positions_calc[code] = (pos, txs)
 
-        logger.info("_get_holdings_summary: processing fund %s, shares=%.4f", code, pos.shares)
-        quote = await nav_cache.get_quote(code)
-        
-        # 从估值时间提取当前交易日。如果未提供估算时间，则取当前日期。
+    # 2. 并发拉取行情数据
+    import asyncio
+    t_quotes_start = time.time()
+    logger.info("_get_holdings_summary: start concurrent fetch of quotes for active funds: %s", active_codes)
+    quotes = await asyncio.gather(*(nav_cache.get_quote(code) for code in active_codes))
+    quotes_map = dict(zip(active_codes, quotes))
+    logger.info("_get_holdings_summary: concurrent fetch of quotes completed, elapsed: %.3fs", time.time() - t_quotes_start)
+
+    # 3. 得到各基金交易日，并发拉取近两日净值
+    trade_days_map = {}
+    from datetime import datetime, timezone, timedelta
+    beijing_tz = timezone(timedelta(hours=8))
+    for code in active_codes:
+        quote = quotes_map[code]
         if quote and quote.estimated_time:
             current_trade_day = quote.estimated_time[:10]
         else:
-            from datetime import datetime, timezone, timedelta
-            current_trade_day = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
-
+            current_trade_day = datetime.now(beijing_tz).strftime("%Y-%m-%d")
+        
+        trade_days_map[code] = current_trade_day
         if current_trade_day > global_trade_day:
             global_trade_day = current_trade_day
 
-        navs = await nav_cache.get_nav_history(code, days=2, expected_date=current_trade_day)
+    t_navs_start = time.time()
+    logger.info("_get_holdings_summary: start concurrent fetch of nav histories")
+    navs_list = await asyncio.gather(*(
+        nav_cache.get_nav_history(code, days=2, expected_date=trade_days_map[code])
+        for code in active_codes
+    ))
+    navs_map = dict(zip(active_codes, navs_list))
+    logger.info("_get_holdings_summary: concurrent fetch of nav histories completed, elapsed: %.3fs", time.time() - t_navs_start)
+
+    # 4. 纯内存计算汇总及持仓列表组装
+    for code in active_codes:
+        pos, txs = positions_calc[code]
+        quote = quotes_map[code]
+        current_trade_day = trade_days_map[code]
+        navs = navs_map[code]
 
         is_actual_published = False
         today_p = None
@@ -183,6 +210,7 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
         is_estimated=any(p.is_estimated for p in positions) if positions else True,
         update_status=update_status,
         positions=positions,
+        trade_date=global_trade_day,
     )
     if not global_trade_day:
         from datetime import datetime, timezone, timedelta
@@ -238,16 +266,9 @@ async def holdings_history(days: int = 30) -> dict:
 
     first_tx_date = min((t["date"] for t in tx_rows), default="9999-12-31")
 
-    # 提前获取今日的实时汇总数据，保证图表最后一天的点和顶部卡片一致
-    summary, global_trade_day = await _get_holdings_summary()
-
     history = []
     for i in range(1, len(dates)):
         today = dates[i]
-        
-        # 跳过等于或晚于当前交易日的历史数据，因为我们将在循环后手动用实时数据覆盖
-        if today >= global_trade_day:
-            continue
         
         # 只显示首笔交易生效之后的走势
         if today < first_tx_date:
@@ -290,14 +311,6 @@ async def holdings_history(days: int = 30) -> dict:
             "date": today,
             "profit": round(daily_profit, 2),
             "cumulative_profit": round(cumulative_profit, 2)
-        })
-
-    # 将今日实时的汇总数据追加到图表末尾
-    if global_trade_day:
-        history.append({
-            "date": global_trade_day,
-            "profit": round(summary.today_profit, 2),
-            "cumulative_profit": round(summary.total_profit, 2)
         })
 
     logger.info("holdings_history: history generation completed, history points: %d, total elapsed: %.3fs", len(history), time.time() - t_start)
