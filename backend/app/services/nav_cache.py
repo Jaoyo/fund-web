@@ -56,18 +56,26 @@ def _trading_days_needed(start_date: str, min_days: int = 30) -> int:
     return max(min_days, trading_days)
 
 
+import logging
+
+logger = logging.getLogger("fund.nav_cache")
+
+
 async def get_quote(code: str) -> Quote | None:
     now = time.time()
     cached = _quote_cache.get(code)
     if cached and now - cached[0] < QUOTE_TTL_SECONDS:
+        logger.info("get_quote: cache hit for fund %s", code)
         return cached[1]
 
+    logger.info("get_quote: cache miss for fund %s, triggering eastmoney.fetch_quote", code)
     quote = await eastmoney.fetch_quote(code)
     _quote_cache[code] = (now, quote)
 
     if quote:
         _upsert_fund(code, quote.name)
         if quote.nav and quote.nav_date:
+            logger.info("get_quote: upserting latest nav %s for fund %s", quote.nav, code)
             _upsert_nav(code, quote.nav_date, quote.nav, None, None)
     return quote
 
@@ -99,6 +107,7 @@ def _is_cache_fresh(rows, expected_date: str | None = None) -> bool:
 
 async def get_nav_history(code: str, days: int = 60, expected_date: str | None = None) -> list[NavRecord]:
     """优先从 DB 读。数量不够则全量拉；数量够但不新鲜则增量补齐。"""
+    logger.info("get_nav_history: start query from DB for fund %s, expected_days: %d, expected_date: %s", code, days, expected_date)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT date, nav, accumulated_nav, growth_rate "
@@ -112,6 +121,7 @@ async def get_nav_history(code: str, days: int = 60, expected_date: str | None =
 
     # 快速路径：数据足够且新鲜，直接返回
     if has_enough and fresh:
+        logger.info("get_nav_history: DB hit (enough & fresh) for fund %s. Records count: %d", code, len(rows))
         return [
             NavRecord(
                 date=r["date"],
@@ -126,16 +136,21 @@ async def get_nav_history(code: str, days: int = 60, expected_date: str | None =
     now = time.time()
     last_refresh = _nav_refresh_ts.get(code, 0)
     if has_enough and now - last_refresh < _NAV_REFRESH_INTERVAL:
+        logger.info("get_nav_history: DB hit (enough but not fresh, throttled by 1 hour) for fund %s. Last refresh: %.1f seconds ago", code, now - last_refresh)
         return _rows_to_nav_records(rows)
 
     # 决定拉取策略
     if has_enough and not fresh:
         # 数据量够但不新鲜 → 只增量拉最近几条补齐
+        latest_date = rows[0]["date"] if rows else "None"
+        logger.info("get_nav_history: DB not fresh for fund %s (latest: %s, expected: %s). Triggering incremental fetch %d records", code, latest_date, expected_date, _INCREMENTAL_FETCH_SIZE)
         records = await eastmoney.fetch_nav_history(code, page_size=_INCREMENTAL_FETCH_SIZE)
     else:
         # 数据量不够 → 全量拉取
+        logger.info("get_nav_history: DB not enough for fund %s (has %d, need %d). Triggering full fetch %d records", code, len(rows), days, max(days, 60))
         records = await eastmoney.fetch_nav_history(code, page_size=max(days, 60))
 
+    logger.info("get_nav_history: writing %d records to DB for fund %s", len(records), code)
     _bulk_upsert_nav(code, records)
     _nav_refresh_ts[code] = now
 

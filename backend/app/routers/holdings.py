@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+import time
+
 from fastapi import APIRouter
 
 from ..db import get_conn
@@ -8,17 +11,23 @@ from ..response import ok
 from ..services import nav_cache, profit
 
 router = APIRouter(prefix="/holdings", tags=["holdings"])
+logger = logging.getLogger("fund.holdings")
 
 
 @router.get("")
 async def list_holdings() -> dict:
     """所有持仓汇总。"""
+    t0 = time.time()
+    logger.info("list_holdings: start request")
     summary, _ = await _get_holdings_summary()
+    logger.info("list_holdings: finished request, elapsed: %.3fs", time.time() - t0)
     return ok(summary.model_dump())
 
 
 async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
     """计算所有持仓汇总，并返回 (汇总数据, 当前最新的交易日)。"""
+    t_start = time.time()
+    logger.info("_get_holdings_summary: starting computation")
     with get_conn() as conn:
         codes = [
             r["code"]
@@ -50,7 +59,10 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
     for r in all_tx_rows:
         txs_by_fund[r["fund_code"]].append(r)
 
+    logger.info("_get_holdings_summary: DB query finished. Active funds: %d. Transaction rows: %d. Elapsed: %.3fs", len(codes), len(all_tx_rows), time.time() - t_start)
+
     for code in codes:
+        t_code_start = time.time()
         tx_rows = txs_by_fund.get(code, [])
 
         txs = [
@@ -68,6 +80,7 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
         if pos.shares <= 1e-6:
             continue
 
+        logger.info("_get_holdings_summary: processing fund %s, shares=%.4f", code, pos.shares)
         quote = await nav_cache.get_quote(code)
         
         # 从估值时间提取当前交易日。如果未提供估算时间，则取当前日期。
@@ -175,12 +188,15 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
         from datetime import datetime, timezone, timedelta
         global_trade_day = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
         
+    logger.info("_get_holdings_summary: summary calculation completed. Active positions: %d. Total elapsed: %.3fs", len(positions), time.time() - t_start)
     return summary, global_trade_day
 
 
 @router.get("/history")
 async def holdings_history(days: int = 30) -> dict:
     """计算最近 N 天的每日收益走势。"""
+    t_start = time.time()
+    logger.info("holdings_history: start request for days=%d", days)
     from collections import defaultdict
 
     with get_conn() as conn:
@@ -199,17 +215,22 @@ async def holdings_history(days: int = 30) -> dict:
         
     dates = sorted([r["date"] for r in dates_result])
     if len(dates) < 2:
+        logger.info("holdings_history: too few dates, returning empty")
         return ok([])
+
+    logger.info("holdings_history: loaded metadata. Active funds: %d. History dates: %d. Elapsed: %.3fs", len(codes), len(dates), time.time() - t_start)
 
     nav_map = {code: {} for code in codes}
     with get_conn() as conn:
         for code in codes:
+            t_nav_start = time.time()
             rows = conn.execute(
                 "SELECT date, nav FROM nav_history WHERE fund_code = ? AND date >= ?",
                 (code, dates[0])
             ).fetchall()
             for r in rows:
                 nav_map[code][r["date"]] = r["nav"]
+            logger.info("holdings_history: loaded local nav for fund %s, records count: %d, elapsed: %.3fs", code, len(rows), time.time() - t_nav_start)
 
     txs_by_fund = defaultdict(list)
     for r in tx_rows:
@@ -279,4 +300,5 @@ async def holdings_history(days: int = 30) -> dict:
             "cumulative_profit": round(summary.total_profit, 2)
         })
 
+    logger.info("holdings_history: history generation completed, history points: %d, total elapsed: %.3fs", len(history), time.time() - t_start)
     return ok(history)

@@ -49,5 +49,10 @@ async def validation_error_handler(
     )
 
 
+import logging
+logger = logging.getLogger("fund.error")
+
+
 async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    logger.exception("服务器未处理的异常错误")
     return JSONResponse(status_code=500, content=fail(5000, f"服务器错误: {exc}"))

@@ -20,6 +20,11 @@ from ..config import (
 from ..models.fund import Fund, NavRecord, Quote
 from ..response import BizError
 
+import logging
+import time
+
+logger = logging.getLogger("fund.eastmoney")
+
 _HEADERS = {
     "Referer": EASTMONEY_REFERER,
     "User-Agent": (
@@ -37,10 +42,19 @@ async def fetch_quote(code: str) -> Optional[Quote]:
     接口返回形如：jsonpgz({"fundcode":"...","name":"...",...});
     """
     url = EASTMONEY_QUOTE_URL.format(code=code)
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        text = resp.text.strip()
+    logger.info("fetch_quote: start requesting quote for fund %s, url: %s", code, url)
+    t0 = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            text = resp.text.strip()
+        elapsed = time.time() - t0
+        logger.info("fetch_quote: request success for fund %s, elapsed: %.3fs", code, elapsed)
+    except Exception as e:
+        elapsed = time.time() - t0
+        logger.error("fetch_quote: request failed for fund %s, elapsed: %.3fs, error: %s", code, elapsed, e)
+        raise
 
     if not text or text == "jsonpgz();":
         return None
@@ -68,14 +82,23 @@ async def fetch_nav_history(
     code: str, page_size: int = 60, page_index: int = 1
 ) -> list[NavRecord]:
     """历史净值。page_size 是想要的总条数，内部按 _PER_PAGE 分页拉，支持并发加速。"""
+    logger.info("fetch_nav_history: start fetching history for fund %s, page_size: %d", code, page_size)
+    t0 = time.time()
     out: list[NavRecord] = []
     
     import asyncio
 
     async def _fetch_page(client: httpx.AsyncClient, p_idx: int) -> tuple[list[NavRecord], int]:
         params = {"fundCode": code, "pageIndex": p_idx, "pageSize": _PER_PAGE}
-        resp = await client.get(EASTMONEY_NAV_URL, params=params)
-        resp.raise_for_status()
+        t_page_0 = time.time()
+        logger.info("fetch_nav_history: requesting page %d for fund %s", p_idx, code)
+        try:
+            resp = await client.get(EASTMONEY_NAV_URL, params=params)
+            resp.raise_for_status()
+            logger.info("fetch_nav_history: page %d success for fund %s, elapsed: %.3fs", p_idx, code, time.time() - t_page_0)
+        except Exception as ex:
+            logger.error("fetch_nav_history: page %d failed for fund %s, elapsed: %.3fs, error: %s", p_idx, code, time.time() - t_page_0, ex)
+            raise
         payload = resp.json()
         items = (payload.get("Data") or {}).get("LSJZList") or []
         records = []
@@ -97,7 +120,9 @@ async def fetch_nav_history(
         out.extend(first_page_records)
         
         if not first_page_records or len(out) >= page_size or len(out) >= total_count:
-            return out[:page_size]
+            res = out[:page_size]
+            logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
+            return res
             
         # 计算还需要拉取的页码
         remaining_needed = min(page_size, total_count) - len(out)
@@ -114,7 +139,9 @@ async def fetch_nav_history(
         for records, _ in results:
             out.extend(records)
             
-    return out[:page_size]
+    res = out[:page_size]
+    logger.info("fetch_nav_history: fetch completed for fund %s, fetched %d records, total elapsed: %.3fs", code, len(res), time.time() - t0)
+    return res
 
 
 async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
@@ -125,10 +152,17 @@ async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
         return Fund(code=code, name=quote.name)
 
     url = EASTMONEY_DETAIL_URL.format(code=code)
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        text = resp.text
+    logger.info("fetch_fund_info: start fetching details for fund %s from %s", code, url)
+    t0 = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, headers=_HEADERS) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            text = resp.text
+        logger.info("fetch_fund_info: details fetched success for fund %s, elapsed: %.3fs", code, time.time() - t0)
+    except Exception as e:
+        logger.error("fetch_fund_info: details fetch failed for fund %s, elapsed: %.3fs, error: %s", code, time.time() - t0, e)
+        raise
 
     name_match = re.search(r'fS_name\s*=\s*"([^"]+)"', text)
     type_match = re.search(r'fund_sourceRate\s*=\s*"[^"]*";\s*var\s+fund_Rate', text)
