@@ -205,3 +205,78 @@ def test_get_nav_history_new_fund_adaptation(monkeypatch, tmp_path):
         assert len(rows2) == 5
         assert called_count == 2
         assert called_sizes[1] == 10  # _INCREMENTAL_FETCH_SIZE
+
+
+def test_fetch_quote_network_retry(monkeypatch):
+    from app.services import eastmoney
+    import httpx
+    import time
+    
+    called_count = 0
+    async def fake_get(*args, **kwargs):
+        nonlocal called_count
+        called_count += 1
+        if called_count == 1:
+            raise httpx.ConnectTimeout("Connect Timeout")
+        
+        class FakeResponse:
+            text = 'jsonpgz({"fundcode":"000001","name":"Test Fund","jzrq":"2026-05-28","dwjz":"1.0","gsz":"1.01","gszzl":"1.0","gztime":"2026-05-28 15:00"});'
+            def raise_for_status(self):
+                pass
+        return FakeResponse()
+
+    # mock global get_client 的 client.get
+    from app.services.eastmoney import get_client
+    client = get_client()
+    monkeypatch.setattr(client, "get", fake_get)
+
+    async def fake_sleep(seconds):
+        pass
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+
+    quote = asyncio.run(eastmoney.fetch_quote("000001"))
+    assert quote is not None
+    assert quote.name == "Test Fund"
+    assert called_count == 2
+
+
+def test_get_quote_network_fallback(monkeypatch):
+    import httpx
+    import time
+    async def fake_fetch_quote(code: str):
+        raise httpx.RequestError("Request Error")
+
+    monkeypatch.setattr(nav_cache.eastmoney, "fetch_quote", fake_fetch_quote)
+    
+    nav_cache._quote_cache.clear()
+    
+    quote = asyncio.run(nav_cache.get_quote("000001"))
+    assert quote is None
+    
+    cached = nav_cache._quote_cache.get("000001")
+    assert cached is not None
+    assert cached[1] is None
+    assert cached[0] > time.time() + 10.0
+
+
+def test_holdings_router_gather_isolation(monkeypatch, tmp_path):
+    from app.routers import holdings
+    import time
+    with _patched_db(monkeypatch, tmp_path):
+        _insert_transaction(code="000005")
+
+        async def fake_get_quote(code: str):
+            raise RuntimeError("DB writing error inside quote (not network error)")
+
+        async def fake_get_nav_history(*args, **kwargs):
+            raise ValueError("Unexpected validation error inside nav")
+
+        monkeypatch.setattr(nav_cache, "get_quote", fake_get_quote)
+        monkeypatch.setattr(nav_cache, "get_nav_history", fake_get_nav_history)
+
+        summary, trade_date = asyncio.run(holdings._get_holdings_summary())
+        
+        assert len(summary.positions) == 1
+        assert summary.positions[0].fund_code == "000005"
+        assert summary.positions[0].profit_rate == -1.0
+

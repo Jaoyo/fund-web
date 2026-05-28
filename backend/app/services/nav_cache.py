@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 import math
 import asyncio
+import httpx
 from datetime import datetime, timedelta, timezone
 
 from ..config import QUOTE_TTL_SECONDS
@@ -16,13 +17,13 @@ from ..db import get_conn
 from ..models.fund import NavRecord, Quote
 from . import eastmoney
 
-# 注意：以下缓存仅适用于单进程（single-process）模式。
-# 多 worker 部署下，每个进程会持有一份独立的缓存，可能导致命中率不佳及一定程度的内存积压。
-_quote_cache: dict[str, tuple[float, Quote | None]] = {}
-
 # 历史净值刷新节流：记录每只基金上次从东财拉取的时间戳，避免短时间内重复请求
 _nav_refresh_ts: dict[str, float] = {}
 _NAV_REFRESH_INTERVAL = 3600  # 同一基金至少间隔 1 小时才再次请求东财
+
+# 结构为 {code: (expires_at, quote)}。其中 expires_at 是物理截止过期时间戳
+_quote_cache: dict[str, tuple[float, Quote | None]] = {}
+_QUOTE_FAILURE_TTL_SECONDS = 15
 
 # 记录已知的每只基金在东财拥有的全部历史净值天数（避免对新发行基金反复拉取）
 _fund_total_count: dict[str, int] = {}
@@ -68,19 +69,24 @@ logger = logging.getLogger("fund.nav_cache")
 async def get_quote(code: str) -> Quote | None:
     now = time.time()
     cached = _quote_cache.get(code)
-    if cached and now - cached[0] < QUOTE_TTL_SECONDS:
+    if cached and now < cached[0]:
         logger.info("get_quote: cache hit for fund %s", code)
         return cached[1]
 
     logger.info("get_quote: cache miss for fund %s, triggering eastmoney.fetch_quote", code)
-    quote = await eastmoney.fetch_quote(code)
-    _quote_cache[code] = (now, quote)
-
-    if quote:
-        _upsert_fund(code, quote.name)
-        if quote.nav and quote.nav_date:
-            logger.info("get_quote: upserting latest nav %s for fund %s", quote.nav, code)
-            _upsert_nav(code, quote.nav_date, quote.nav, None, None)
+    try:
+        quote = await eastmoney.fetch_quote(code)
+        _quote_cache[code] = (now + QUOTE_TTL_SECONDS, quote)
+        if quote:
+            _upsert_fund(code, quote.name)
+            if quote.nav and quote.nav_date:
+                logger.info("get_quote: upserting latest nav %s for fund %s", quote.nav, code)
+                _upsert_nav(code, quote.nav_date, quote.nav, None, None)
+    except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
+        logger.error("get_quote: network error fetching quote for fund %s, error: %s", code, e)
+        quote = None
+        # 缓存 15 秒空值以避免瞬时请求反复穿透重试
+        _quote_cache[code] = (now + _QUOTE_FAILURE_TTL_SECONDS, None)
     return quote
 
 
@@ -181,20 +187,23 @@ async def get_nav_history(
         return _rows_to_nav_records(rows)
 
     # 决定拉取策略
-    if has_enough and not fresh:
-        # 数据量够但不新鲜 → 只增量拉最近几条补齐
-        latest_date = rows[0]["date"] if rows else "None"
-        logger.info("get_nav_history: DB not fresh for fund %s (latest: %s, expected: %s). Triggering incremental fetch %d records", code, latest_date, expected_date, _INCREMENTAL_FETCH_SIZE)
-        records, total_count = await eastmoney.fetch_nav_history(code, page_size=_INCREMENTAL_FETCH_SIZE)
-    else:
-        # 数据量不够 → 全量拉取
-        logger.info("get_nav_history: DB not enough for fund %s (has %d, need %d). Triggering full fetch %d records", code, len(rows), days, max(days, 60))
-        records, total_count = await eastmoney.fetch_nav_history(code, page_size=max(days, 60))
+    try:
+        if has_enough and not fresh:
+            # 数据量够但不新鲜 → 只增量拉最近几条补齐
+            latest_date = rows[0]["date"] if rows else "None"
+            logger.info("get_nav_history: DB not fresh for fund %s (latest: %s, expected: %s). Triggering incremental fetch %d records", code, latest_date, expected_date, _INCREMENTAL_FETCH_SIZE)
+            records, total_count = await eastmoney.fetch_nav_history(code, page_size=_INCREMENTAL_FETCH_SIZE)
+        else:
+            # 数据量不够 → 全量拉取
+            logger.info("get_nav_history: DB not enough for fund %s (has %d, need %d). Triggering full fetch %d records", code, len(rows), days, max(days, 60))
+            records, total_count = await eastmoney.fetch_nav_history(code, page_size=max(days, 60))
 
-    _fund_total_count[code] = total_count
-    logger.info("get_nav_history: writing %d records to DB for fund %s, total_count=%d", len(records), code, total_count)
-    _bulk_upsert_nav(code, records)
-    _nav_refresh_ts[code] = now
+        _fund_total_count[code] = total_count
+        logger.info("get_nav_history: writing %d records to DB for fund %s, total_count=%d", len(records), code, total_count)
+        _bulk_upsert_nav(code, records)
+        _nav_refresh_ts[code] = now
+    except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
+        logger.error("get_nav_history: network error fetching nav history for fund %s, fallback to DB: %s", code, e)
 
     # 从 DB 重新读取合并后的完整数据
     with get_conn() as conn:

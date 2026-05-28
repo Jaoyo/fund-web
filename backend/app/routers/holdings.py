@@ -87,7 +87,14 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
     import asyncio
     t_quotes_start = time.time()
     logger.info("_get_holdings_summary: start concurrent fetch of quotes for active funds: %s", active_codes)
-    quotes = await asyncio.gather(*(nav_cache.get_quote(code) for code in active_codes))
+    quotes_results = await asyncio.gather(*(nav_cache.get_quote(code) for code in active_codes), return_exceptions=True)
+    quotes = []
+    for code, q in zip(active_codes, quotes_results):
+        if isinstance(q, Exception):
+            logger.error("_get_holdings_summary: get_quote raised exception for fund %s: %s", code, q)
+            quotes.append(None)
+        else:
+            quotes.append(q)
     quotes_map = dict(zip(active_codes, quotes))
     logger.info("_get_holdings_summary: concurrent fetch of quotes completed, elapsed: %.3fs", time.time() - t_quotes_start)
 
@@ -108,10 +115,19 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
 
     t_navs_start = time.time()
     logger.info("_get_holdings_summary: start concurrent fetch of nav histories")
-    navs_list = await asyncio.gather(*(
+    navs_results = await asyncio.gather(*(
         nav_cache.get_nav_history(code, days=2, expected_date=trade_days_map[code])
         for code in active_codes
-    ))
+    ), return_exceptions=True)
+    
+    navs_list = []
+    for code, n in zip(active_codes, navs_results):
+        if isinstance(n, Exception):
+            logger.error("_get_holdings_summary: get_nav_history raised exception for fund %s: %s", code, n)
+            navs_list.append([])
+        else:
+            navs_list.append(n)
+            
     navs_map = dict(zip(active_codes, navs_list))
     logger.info("_get_holdings_summary: concurrent fetch of nav histories completed, elapsed: %.3fs", time.time() - t_navs_start)
 
