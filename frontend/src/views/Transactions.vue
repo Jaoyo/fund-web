@@ -89,8 +89,8 @@
         <el-table-column prop="fund_code" label="基金代码" min-width="90" class-name="font-number" />
         <el-table-column label="交易类型" min-width="80">
           <template #default="{ row }">
-            <span :class="row.type === 'buy' ? 'type-buy' : 'type-sell'">
-              {{ row.type === 'buy' ? '买入' : '卖出' }}
+            <span :class="row.type === 'sell' ? 'type-sell' : (row.type === 'import' ? 'type-import' : 'type-buy')">
+              {{ row.type === 'import' ? '导入' : (row.type === 'buy' ? '买入' : '卖出') }}
             </span>
           </template>
         </el-table-column>
@@ -102,12 +102,12 @@
         </el-table-column>
         <el-table-column prop="shares" label="确认份额" min-width="100" class-name="font-number">
           <template #default="{ row }">
-            {{ row.nav > 0 ? row.shares.toFixed(2) : (row.type === 'buy' ? '-' : row.shares?.toFixed(2) || '-') }}
+            {{ row.nav > 0 ? row.shares.toFixed(2) : (row.type in ['buy', 'import'] ? '-' : row.shares?.toFixed(2) || '-') }}
           </template>
         </el-table-column>
         <el-table-column prop="amount" label="交易金额" min-width="100" class-name="font-number">
           <template #default="{ row }">
-            {{ row.nav > 0 ? '¥' + row.amount.toFixed(2) : (row.type === 'sell' ? '-' : '¥' + row.amount?.toFixed(2) || '-') }}
+            {{ row.nav > 0 ? '¥' + row.amount.toFixed(2) : (row.type === 'sell' ? '-' : '¥' + (row.amount?.toFixed(2) || '-')) }}
           </template>
         </el-table-column>
         <el-table-column v-if="!isMobile" prop="fee" label="交易费用" min-width="80" class-name="font-number" />
@@ -193,7 +193,7 @@ async function submit() {
       note: form.note,
       client_id: `${form.fund_code}-${form.date}-${form.type}-${Date.now()}`,
     })
-    ElMessage.success(form.type === 'import' ? '持仓导入成功，已转为买入记录' : '交易记录已保存')
+    ElMessage.success(form.type === 'import' ? '持仓导入成功' : '交易记录已保存')
     form.amount = undefined
     form.shares = undefined
     form.profit = undefined
@@ -272,6 +272,14 @@ onBeforeUnmount(() => {
   color: #0ecb81;
   font-weight: 600;
   background: rgba(14, 203, 129, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.type-import {
+  color: #3b82f6;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.1);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;

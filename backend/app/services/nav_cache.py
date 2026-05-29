@@ -251,7 +251,7 @@ async def sync_pending_transactions() -> int:
 
             if nav_record and nav_record.nav > 0:
                 nav = round(nav_record.nav, 4)
-                if tx["type"] == "buy":
+                if tx["type"] in ("buy", "import"):
                     # 买入待确认：已知 amount，求 shares
                     amount = round(tx["amount"], 2)
                     shares = round((amount - tx["fee"]) / nav, 2)

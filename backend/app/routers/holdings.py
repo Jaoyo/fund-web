@@ -295,10 +295,11 @@ async def holdings_history(days: int = 30) -> dict:
                 cumulative_profit += (market - pos.cost_amount)
                 
             # 计算当日收益：拿当日初份额 * (今日净值 - 昨日净值)
+            # import（导入持仓）当天即生效，用 <= today；buy（买入）T+1 确认，用 < today
             shares_start_of_day = sum(
-                (t["shares"] if t["type"] == "buy" else -t["shares"])
+                (t["shares"] if t["type"] in ("buy", "import") else -t["shares"])
                 for t in txs_by_fund[code]
-                if t["date"] < today
+                if (t["date"] <= today if t["type"] == "import" else t["date"] < today)
             )
             nav_yest = nav_map[code].get(yesterday)
             

@@ -79,7 +79,7 @@ async def _build_one(code: str, days: int) -> dict | None:
             latest_nav = navs[0].nav if navs else 0.0
             _, profit_rate = profit.total_profit(pos, latest_nav)
 
-            first_buy = next((t for t in txs if t.type == "buy"), None)
+            first_buy = next((t for t in txs if t.type in ("buy", "import")), None)
             if first_buy:
                 held_navs = [n.nav for n in navs if n.date >= first_buy.date]
                 if held_navs:

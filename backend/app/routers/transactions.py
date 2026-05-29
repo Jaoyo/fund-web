@@ -55,9 +55,8 @@ async def create_transaction(payload: TransactionIn) -> dict:
         nav = round(cost_amount / shares, 4) if shares > 0 else 0.0
         amount = round(cost_amount, 2)
 
-        # 覆盖 payload.type 供后续幂等和持久化使用
-        payload.type = "buy"
-        payload.shares = shares  # 这样可以避免后面 not payload.shares 逻辑再次除以 nav 造成精度损失
+        # 保留 type = "import" 入库，收益计算时可区分：import 当天即生效，buy 需要 T+1
+        payload.shares = shares  # 避免后面 not payload.shares 逻辑再次除以 nav 造成精度损失
         if not payload.note:
             payload.note = f"初始化导入(市值:{market_value:.2f},收益:{profit_val:.2f})"
     else:
@@ -82,13 +81,13 @@ async def create_transaction(payload: TransactionIn) -> dict:
     fee = round(payload.fee, 2)
     if nav > 0:
         nav = round(nav, 4)
-        if payload.type == "buy" and not payload.shares:
+        if payload.type in ("buy", "import") and not payload.shares:
             shares = round((amount - fee) / nav, 2)
         elif payload.type == "sell" and not payload.amount:
             amount = round(shares * nav, 2)
     else:
-        # 待确认订单
-        if payload.type == "buy":
+        # 待确认订单（import 不会走到这里，因为前面已算好 nav）
+        if payload.type in ("buy", "import"):
             shares = 0.0
         else:
             amount = 0.0

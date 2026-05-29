@@ -75,8 +75,8 @@
         <el-table-column prop="date" label="日期" min-width="100" class-name="font-number" />
         <el-table-column label="交易类型" min-width="80">
           <template #default="{ row }">
-            <span :class="row.type === 'buy' ? 'type-buy' : 'type-sell'">
-              {{ row.type === 'buy' ? '买入' : '卖出' }}
+            <span :class="row.type === 'sell' ? 'type-sell' : (row.type === 'import' ? 'type-import' : 'type-buy')">
+              {{ row.type === 'import' ? '导入' : (row.type === 'buy' ? '买入' : '卖出') }}
             </span>
           </template>
         </el-table-column>
@@ -219,6 +219,14 @@ onBeforeUnmount(() => {
   color: #0ecb81;
   font-weight: 600;
   background: rgba(14, 203, 129, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.type-import {
+  color: #3b82f6;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.1);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;

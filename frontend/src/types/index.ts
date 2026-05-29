@@ -75,7 +75,7 @@ export interface Transaction {
   client_id: string | null
   fund_code: string
   date: string
-  type: 'buy' | 'sell'
+  type: 'buy' | 'sell' | 'import'
   nav: number
   shares: number
   amount: number

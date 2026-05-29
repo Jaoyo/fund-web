@@ -20,7 +20,7 @@ class TxRow:
     """profit 计算只关心这几个字段，方便单测脱离 DB。"""
 
     date: str
-    type: str  # 'buy' or 'sell'
+    type: str  # 'buy', 'sell', 或 'import'（导入持仓，当天即生效）
     nav: float
     shares: float
     amount: float
@@ -37,8 +37,8 @@ class PositionResult:
 
 def compute_position(txs: Iterable[TxRow]) -> PositionResult:
     """对一只基金的所有交易，按时间顺序计算当前持仓状态。"""
-    # 二级排序：同一天时，买入（buy）排在卖出（sell）之前，避免因顺序问题吞掉卖出份额
-    sorted_txs = sorted(txs, key=lambda t: (t.date, 0 if t.type == "buy" else 1))
+    # 二级排序：同一天时，买入（buy/import）排在卖出（sell）之前，避免因顺序问题吞掉卖出份额
+    sorted_txs = sorted(txs, key=lambda t: (t.date, 0 if t.type in ("buy", "import") else 1))
 
     shares = 0.0
     cost = 0.0
@@ -49,7 +49,7 @@ def compute_position(txs: Iterable[TxRow]) -> PositionResult:
         if t.nav == 0.0:
             continue
 
-        if t.type == "buy":
+        if t.type in ("buy", "import"):
             shares += t.shares
             cost += t.amount + t.fee
         elif t.type == "sell":
