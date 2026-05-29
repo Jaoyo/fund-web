@@ -53,12 +53,12 @@ async def create_transaction(payload: TransactionIn) -> dict:
         if latest_nav <= 0:
             raise BizError(4042, f"未获取到基金 {payload.fund_code} 的最新净值，无法导入旧持仓")
 
-        market_value = payload.amount
-        profit_val = payload.profit
-        cost_amount = market_value - profit_val
-        shares = market_value / latest_nav
-        nav = cost_amount / shares if shares > 0 else 0.0
-        amount = cost_amount
+        market_value = round(payload.amount, 2)
+        profit_val = round(payload.profit, 2)
+        cost_amount = round(market_value - profit_val, 2)
+        shares = round(market_value / latest_nav, 2)
+        nav = round(cost_amount / shares, 4) if shares > 0 else 0.0
+        amount = round(cost_amount, 2)
 
         # 覆盖 payload.type 供后续幂等和持久化使用
         payload.type = "buy"
@@ -71,8 +71,8 @@ async def create_transaction(payload: TransactionIn) -> dict:
         if payload.type == "sell" and payload.shares is None:
             raise BizError(4001, "卖出时必须提供份额")
 
-        shares = payload.shares or 0.0
-        amount = payload.amount or 0.0
+        shares = round(payload.shares, 2) if payload.shares is not None else 0.0
+        amount = round(payload.amount, 2) if payload.amount is not None else 0.0
         nav = payload.nav
 
         # 如果没有提供确切净值，尝试去缓存查，或者标记为待确认
@@ -84,11 +84,13 @@ async def create_transaction(payload: TransactionIn) -> dict:
             else:
                 nav = 0.0  # 0.0 标识待确认
 
+    fee = round(payload.fee, 2)
     if nav > 0:
+        nav = round(nav, 4)
         if payload.type == "buy" and not payload.shares:
-            shares = (amount - payload.fee) / nav
+            shares = round((amount - fee) / nav, 2)
         elif payload.type == "sell" and not payload.amount:
-            amount = shares * nav
+            amount = round(shares * nav, 2)
     else:
         # 待确认订单
         if payload.type == "buy":
@@ -125,7 +127,7 @@ async def create_transaction(payload: TransactionIn) -> dict:
                 nav,
                 shares,
                 amount,
-                payload.fee,
+                fee,
                 payload.note,
                 now,
             ),

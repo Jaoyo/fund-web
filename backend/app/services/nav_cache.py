@@ -266,15 +266,15 @@ async def sync_pending_transactions() -> int:
             nav_record = next((r for r in nav_history if r.date == tx["date"]), None)
 
             if nav_record and nav_record.nav > 0:
-                nav = nav_record.nav
+                nav = round(nav_record.nav, 4)
                 if tx["type"] == "buy":
                     # 买入待确认：已知 amount，求 shares
-                    amount = tx["amount"]
-                    shares = (amount - tx["fee"]) / nav
+                    amount = round(tx["amount"], 2)
+                    shares = round((amount - tx["fee"]) / nav, 2)
                 else:
                     # 卖出待确认：已知 shares，求 amount
-                    shares = tx["shares"]
-                    amount = shares * nav
+                    shares = round(tx["shares"], 2)
+                    amount = round(shares * nav, 2)
 
                 with get_conn() as conn:
                     conn.execute(
