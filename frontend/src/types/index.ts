@@ -80,6 +80,7 @@ export interface Transaction {
   shares: number
   amount: number
   fee: number
+  settlement_days: number
   note: string | null
   created_at: string
 }
@@ -95,6 +96,7 @@ export interface TransactionIn {
   profit?: number
   fund_name?: string
   fee?: number
+  settlement_days?: number
   note?: string
 }
 

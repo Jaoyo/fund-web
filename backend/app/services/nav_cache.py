@@ -229,7 +229,7 @@ async def sync_pending_transactions() -> int:
     """扫描所有未知价（待确认）订单，如果已有净值则补全份额和金额。返回成功同步的订单数。"""
     with get_conn() as conn:
         pending_txs = conn.execute(
-            "SELECT id, fund_code, date, type, shares, amount, fee FROM transactions WHERE nav = 0.0"
+            "SELECT id, fund_code, date, type, shares, amount, fee, settlement_days FROM transactions WHERE nav = 0.0"
         ).fetchall()
 
     if not pending_txs:
@@ -247,7 +247,15 @@ async def sync_pending_transactions() -> int:
         nav_history = await get_nav_history(code, days=_trading_days_needed(earliest_date))
 
         for tx in txs:
-            nav_record = next((r for r in nav_history if r.date == tx["date"]), None)
+            nav_asc = list(reversed(nav_history))
+            idx = next((i for i, r in enumerate(nav_asc) if r.date >= tx["date"]), None)
+            
+            nav_record = None
+            if idx is not None:
+                settlement_days = tx["settlement_days"]
+                target_idx = idx + (settlement_days - 1)
+                if target_idx < len(nav_asc):
+                    nav_record = nav_asc[target_idx]
 
             if nav_record and nav_record.nav > 0:
                 nav = round(nav_record.nav, 4)

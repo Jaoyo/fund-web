@@ -47,7 +47,7 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
     from collections import defaultdict
     with get_conn() as conn:
         all_tx_rows = conn.execute(
-            "SELECT fund_code, date, type, nav, shares, amount, fee "
+            "SELECT fund_code, date, type, nav, shares, amount, fee, settlement_days "
             "FROM transactions ORDER BY fund_code, date"
         ).fetchall()
         
@@ -68,6 +68,7 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
                 shares=r["shares"],
                 amount=r["amount"],
                 fee=r["fee"],
+                settlement_days=r["settlement_days"],
             )
             for r in tx_rows
         ]
@@ -237,7 +238,7 @@ async def holdings_history(days: int = 30) -> dict:
         ]
         
         tx_rows = conn.execute(
-            "SELECT fund_code, date, type, nav, shares, amount, fee FROM transactions WHERE nav > 0 ORDER BY date"
+            "SELECT fund_code, date, type, nav, shares, amount, fee, settlement_days FROM transactions WHERE nav > 0 ORDER BY date"
         ).fetchall()
         
         dates_result = conn.execute(
@@ -260,7 +261,20 @@ async def holdings_history(days: int = 30) -> dict:
 
     txs_by_fund = defaultdict(list)
     for r in tx_rows:
-        txs_by_fund[r["fund_code"]].append(r)
+        tx = dict(r)
+        if tx["type"] == "import":
+            tx["effective_date"] = tx["date"]
+        else:
+            idx = next((i for i, d in enumerate(dates) if d >= tx["date"]), None)
+            if idx is not None:
+                target_idx = idx + tx["settlement_days"]
+                if target_idx < len(dates):
+                    tx["effective_date"] = dates[target_idx]
+                else:
+                    tx["effective_date"] = "9999-12-31"
+            else:
+                tx["effective_date"] = "9999-12-31"
+        txs_by_fund[tx["fund_code"]].append(tx)
 
     first_tx_date = min((t["date"] for t in tx_rows), default="9999-12-31")
 
@@ -284,7 +298,8 @@ async def holdings_history(days: int = 30) -> dict:
                 
             txs = [profit.TxRow(
                 date=t["date"], type=t["type"], nav=t["nav"],
-                shares=t["shares"], amount=t["amount"], fee=t["fee"]
+                shares=t["shares"], amount=t["amount"], fee=t["fee"],
+                settlement_days=t["settlement_days"]
             ) for t in txs_up_to_today]
             
             pos = profit.compute_position(txs)
@@ -295,11 +310,11 @@ async def holdings_history(days: int = 30) -> dict:
                 cumulative_profit += (market - pos.cost_amount)
                 
             # 计算当日收益：拿当日初份额 * (今日净值 - 昨日净值)
-            # import（导入持仓）当天即生效，用 <= today；buy（买入）T+1 确认，用 < today
+            # import当天即生效，buy（买入）按有效日期生效（T+settlement_days）
             shares_start_of_day = sum(
                 (t["shares"] if t["type"] in ("buy", "import") else -t["shares"])
                 for t in txs_by_fund[code]
-                if (t["date"] <= today if t["type"] == "import" else t["date"] < today)
+                if today >= t["effective_date"]
             )
             nav_yest = nav_map[code].get(yesterday)
             

@@ -41,6 +41,14 @@
                 <el-input-number v-model="form.fee" :precision="2" :step="1" :min="0" style="width: 100%;" />
               </el-form-item>
             </el-col>
+            <el-col :span="8" :xs="24">
+              <el-form-item label="交易确认">
+                <el-radio-group v-model="form.settlement_days" class="type-radio-group">
+                  <el-radio-button :value="1">T+1</el-radio-button>
+                  <el-radio-button :value="2">T+2</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
           </template>
           <template v-else>
             <el-col :span="8" :xs="24">
@@ -141,6 +149,7 @@ const form = reactive<TransactionIn & { fee: number }>({
   profit: undefined,
   fund_name: '',
   fee: 0,
+  settlement_days: 1,
   note: '',
 })
 
@@ -190,6 +199,7 @@ async function submit() {
       profit: form.profit,
       fund_name: form.fund_name || undefined,
       fee: form.type === 'import' ? 0 : form.fee,
+      settlement_days: form.type === 'import' ? 1 : form.settlement_days,
       note: form.note,
       client_id: `${form.fund_code}-${form.date}-${form.type}-${Date.now()}`,
     })
@@ -198,6 +208,7 @@ async function submit() {
     form.shares = undefined
     form.profit = undefined
     form.fund_name = ''
+    form.settlement_days = 1
     form.note = ''
     await loadList()
     await store.refresh()

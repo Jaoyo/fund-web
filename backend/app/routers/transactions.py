@@ -72,7 +72,15 @@ async def create_transaction(payload: TransactionIn) -> dict:
         # 如果没有提供确切净值，尝试去缓存查，或者标记为待确认
         if nav is None or nav <= 0:
             nav_history = await nav_cache.get_nav_history(payload.fund_code, days=30)
-            nav_record = next((r for r in nav_history if r.date == payload.date), None)
+            nav_asc = list(reversed(nav_history))
+            idx = next((i for i, r in enumerate(nav_asc) if r.date >= payload.date), None)
+            
+            nav_record = None
+            if idx is not None:
+                target_idx = idx + (payload.settlement_days - 1)
+                if target_idx < len(nav_asc):
+                    nav_record = nav_asc[target_idx]
+                    
             if nav_record and nav_record.nav > 0:
                 nav = nav_record.nav
             else:
@@ -111,8 +119,8 @@ async def create_transaction(payload: TransactionIn) -> dict:
         )
         cur = conn.execute(
             "INSERT INTO transactions"
-            "(client_id, fund_code, date, type, nav, shares, amount, fee, note, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(client_id, fund_code, date, type, nav, shares, amount, fee, settlement_days, note, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 payload.client_id,
                 payload.fund_code,
@@ -122,6 +130,7 @@ async def create_transaction(payload: TransactionIn) -> dict:
                 shares,
                 amount,
                 fee,
+                payload.settlement_days,
                 payload.note,
                 now,
             ),

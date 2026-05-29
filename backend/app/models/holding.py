@@ -18,6 +18,7 @@ class TransactionIn(BaseModel):
     profit: Optional[float] = Field(None, description="当前累计收益，仅用于导入旧持仓")
     fund_name: Optional[str] = Field(None, description="基金名称，仅用于导入旧持仓时可选输入")
     fee: float = Field(0, ge=0)
+    settlement_days: int = Field(1, description="交收周期，1为T+1，2为T+2")
     note: Optional[str] = None
 
 
@@ -31,6 +32,7 @@ class Transaction(BaseModel):
     shares: float
     amount: float
     fee: float
+    settlement_days: int
     note: Optional[str]
     created_at: str
 

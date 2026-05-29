@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     shares      REAL NOT NULL,
     amount      REAL NOT NULL,
     fee         REAL NOT NULL DEFAULT 0,
+    settlement_days INTEGER NOT NULL DEFAULT 1,
     note        TEXT,
     created_at  TEXT NOT NULL
 );
@@ -69,6 +70,10 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         try:
             conn.execute("ALTER TABLE funds ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+        try:
+            conn.execute("ALTER TABLE transactions ADD COLUMN settlement_days INTEGER NOT NULL DEFAULT 1")
         except sqlite3.OperationalError:
             pass  # 列已存在
         conn.commit()

@@ -25,6 +25,7 @@ class TxRow:
     shares: float
     amount: float
     fee: float = 0.0
+    settlement_days: int = 1
 
 
 @dataclass
