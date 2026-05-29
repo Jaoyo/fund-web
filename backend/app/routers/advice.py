@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import logging
-import time
-
 from fastapi import APIRouter
 
 from ..db import get_conn
@@ -10,14 +7,11 @@ from ..response import ok
 from ..services import advisor, nav_cache, profit
 
 router = APIRouter(prefix="/advice", tags=["advice"])
-logger = logging.getLogger("fund.advice")
 
 
 @router.get("")
 async def list_advice(days: int = 750) -> dict:
     """所有持仓基金的建议汇总。"""
-    t0 = time.time()
-    logger.info("list_advice: start request for days=%d", days)
     with get_conn() as conn:
         codes = [
             r["code"]
@@ -37,28 +31,21 @@ async def list_advice(days: int = 750) -> dict:
             
     # 保证持仓的基金在前，未持仓（已清仓/仅关注）的基金在后，且内部保留原来的 sort_order
     results.sort(key=lambda x: x["profit_rate"] is None)
-    logger.info("list_advice: completed, count: %d, elapsed: %.3fs", len(results), time.time() - t0)
     return ok(results)
 
 
 @router.get("/{code}")
 async def get_advice(code: str, days: int = 750) -> dict:
     """单基金详细指标。即使没持仓也能查（用于决定要不要建仓）。"""
-    t0 = time.time()
-    logger.info("get_advice: start request for fund %s, days=%d", code, days)
     advice = await _build_one(code, days)
-    logger.info("get_advice: completed for fund %s, elapsed: %.3fs", code, time.time() - t0)
     if advice is None:
         return ok(None)
     return ok(advice)
 
 
 async def _build_one(code: str, days: int) -> dict | None:
-    t_build_start = time.time()
-    logger.info("_build_one: start computing for fund %s, days=%d", code, days)
     navs = await nav_cache.get_nav_history(code, days=days, background_fetch=True)
     if not navs:
-        logger.info("_build_one: empty nav history for fund %s, skip", code)
         return None
 
     with get_conn() as conn:
@@ -106,5 +93,4 @@ async def _build_one(code: str, days: int) -> dict | None:
         profit_rate=profit_rate,
         held_drawdown=held_drawdown,
     )
-    logger.info("_build_one: completed computing for fund %s, elapsed: %.3fs", code, time.time() - t_build_start)
     return advice.model_dump()

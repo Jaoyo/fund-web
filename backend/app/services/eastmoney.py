@@ -62,8 +62,6 @@ async def fetch_quote(code: str) -> Optional[Quote]:
     接口返回形如：jsonpgz({"fundcode":"...","name":"...",...});
     """
     url = EASTMONEY_QUOTE_URL.format(code=code)
-    logger.info("fetch_quote: start requesting quote for fund %s, url: %s", code, url)
-    t0 = time.time()
     client = get_client()
     resp = None
     max_retries = 2
@@ -111,7 +109,6 @@ async def fetch_nav_history(
     code: str, page_size: int = 60, page_index: int = 1
 ) -> tuple[list[NavRecord], int]:
     """历史净值。page_size 是想要的总条数，内部按 _PER_PAGE 分页拉，支持并发加速。"""
-    logger.info("fetch_nav_history: start fetching history for fund %s, page_size: %d", code, page_size)
     t0 = time.time()
     out: list[NavRecord] = []
     
@@ -121,12 +118,10 @@ async def fetch_nav_history(
         max_retries = 2
         for attempt in range(max_retries):
             t_page_0 = time.time()
-            logger.info("fetch_nav_history: requesting page %d for fund %s, attempt: %d", p_idx, code, attempt + 1)
             try:
                 async with _SEMAPHORE:
                     resp = await client.get(EASTMONEY_NAV_URL, params=params)
                 resp.raise_for_status()
-                logger.info("fetch_nav_history: page %d success for fund %s, elapsed: %.3fs", p_idx, code, time.time() - t_page_0)
                 break
             except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as ex:
                 logger.error("fetch_nav_history: page %d network error for fund %s, elapsed: %.3fs, error: %s", p_idx, code, time.time() - t_page_0, ex)
@@ -186,7 +181,6 @@ async def fetch_fund_info(code: str, quote: Optional[Quote] = None) -> Fund:
         return Fund(code=code, name=quote.name)
 
     url = EASTMONEY_DETAIL_URL.format(code=code)
-    logger.info("fetch_fund_info: start fetching details for fund %s from %s", code, url)
     t0 = time.time()
     try:
         client = get_client()

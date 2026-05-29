@@ -70,17 +70,14 @@ async def get_quote(code: str) -> Quote | None:
     now = time.time()
     cached = _quote_cache.get(code)
     if cached and now < cached[0]:
-        logger.info("get_quote: cache hit for fund %s", code)
         return cached[1]
 
-    logger.info("get_quote: cache miss for fund %s, triggering eastmoney.fetch_quote", code)
     try:
         quote = await eastmoney.fetch_quote(code)
         _quote_cache[code] = (now + QUOTE_TTL_SECONDS, quote)
         if quote:
             _upsert_fund(code, quote.name)
             if quote.nav and quote.nav_date:
-                logger.info("get_quote: upserting latest nav %s for fund %s", quote.nav, code)
                 _upsert_nav(code, quote.nav_date, quote.nav, None, None)
     except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
         logger.error("get_quote: network error fetching quote for fund %s, error: %s", code, e)
@@ -122,7 +119,6 @@ async def get_nav_history(
     background_fetch: bool = False
 ) -> list[NavRecord]:
     """优先从 DB 读。数量不够则全量拉；数量够但不新鲜则增量补齐。支持后台静默补齐。"""
-    logger.info("get_nav_history: start query from DB for fund %s, expected_days: %d, expected_date: %s", code, days, expected_date)
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT date, nav, accumulated_nav, growth_rate "
@@ -135,14 +131,12 @@ async def get_nav_history(
     if not has_enough:
         known_total = _fund_total_count.get(code)
         if known_total is not None and len(rows) >= known_total:
-            logger.info("get_nav_history: DB data count %d matches known total count %d for fund %s, treating as enough", len(rows), known_total, code)
             has_enough = True
 
     fresh = _is_cache_fresh(rows, expected_date)
 
     # 快速路径：数据足够且新鲜，直接返回
     if has_enough and fresh:
-        logger.info("get_nav_history: DB hit (enough & fresh) for fund %s. Records count: %d", code, len(rows))
         return [
             NavRecord(
                 date=r["date"],
@@ -157,7 +151,6 @@ async def get_nav_history(
     now = time.time()
     last_refresh = _nav_refresh_ts.get(code, 0)
     if has_enough and now - last_refresh < _NAV_REFRESH_INTERVAL:
-        logger.info("get_nav_history: DB hit (enough but not fresh, throttled by 1 hour) for fund %s. Last refresh: %.1f seconds ago", code, now - last_refresh)
         return _rows_to_nav_records(rows)
 
     # 如果允许后台拉取且本地至少有一条历史数据，则直接发起后台任务并快速返回
@@ -168,21 +161,16 @@ async def get_nav_history(
             async def _bg_fetch_and_save():
                 try:
                     if has_enough and not fresh:
-                        logger.info("bg_fetch: start incremental fetch for fund %s", code)
                         records, total_count = await eastmoney.fetch_nav_history(code, page_size=_INCREMENTAL_FETCH_SIZE)
                     else:
-                        logger.info("bg_fetch: start full fetch for fund %s, page_size=%d", code, max(days, 60))
                         records, total_count = await eastmoney.fetch_nav_history(code, page_size=max(days, 60))
                     
                     _fund_total_count[code] = total_count
                     _bulk_upsert_nav(code, records)
-                    logger.info("bg_fetch: success for fund %s, total_count=%d, upserted %d records", code, total_count, len(records))
                 except Exception as ex:
                     logger.error("bg_fetch: failed for fund %s, error: %s", code, ex)
                     
             asyncio.create_task(_bg_fetch_and_save())
-        else:
-            logger.info("get_nav_history: background fetch throttled by 1 hour for fund %s. Returning local data.", code)
             
         return _rows_to_nav_records(rows)
 
@@ -190,16 +178,12 @@ async def get_nav_history(
     try:
         if has_enough and not fresh:
             # 数据量够但不新鲜 → 只增量拉最近几条补齐
-            latest_date = rows[0]["date"] if rows else "None"
-            logger.info("get_nav_history: DB not fresh for fund %s (latest: %s, expected: %s). Triggering incremental fetch %d records", code, latest_date, expected_date, _INCREMENTAL_FETCH_SIZE)
             records, total_count = await eastmoney.fetch_nav_history(code, page_size=_INCREMENTAL_FETCH_SIZE)
         else:
             # 数据量不够 → 全量拉取
-            logger.info("get_nav_history: DB not enough for fund %s (has %d, need %d). Triggering full fetch %d records", code, len(rows), days, max(days, 60))
             records, total_count = await eastmoney.fetch_nav_history(code, page_size=max(days, 60))
 
         _fund_total_count[code] = total_count
-        logger.info("get_nav_history: writing %d records to DB for fund %s, total_count=%d", len(records), code, total_count)
         _bulk_upsert_nav(code, records)
         _nav_refresh_ts[code] = now
     except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:

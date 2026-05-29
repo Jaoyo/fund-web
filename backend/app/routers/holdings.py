@@ -17,17 +17,13 @@ logger = logging.getLogger("fund.holdings")
 @router.get("")
 async def list_holdings() -> dict:
     """所有持仓汇总。"""
-    t0 = time.time()
-    logger.info("list_holdings: start request")
     summary, _ = await _get_holdings_summary()
-    logger.info("list_holdings: finished request, elapsed: %.3fs", time.time() - t0)
     return ok(summary.model_dump())
 
 
 async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
     """计算所有持仓汇总，并返回 (汇总数据, 当前最新的交易日)。"""
     t_start = time.time()
-    logger.info("_get_holdings_summary: starting computation")
     with get_conn() as conn:
         codes = [
             r["code"]
@@ -59,8 +55,6 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
     for r in all_tx_rows:
         txs_by_fund[r["fund_code"]].append(r)
 
-    logger.info("_get_holdings_summary: DB query finished. Active funds: %d. Transaction rows: %d. Elapsed: %.3fs", len(codes), len(all_tx_rows), time.time() - t_start)
-
     # 1. 过滤有仓位的活跃持仓，并算好持仓份额
     active_codes = []
     positions_calc = {}
@@ -85,8 +79,6 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
 
     # 2. 并发拉取行情数据
     import asyncio
-    t_quotes_start = time.time()
-    logger.info("_get_holdings_summary: start concurrent fetch of quotes for active funds: %s", active_codes)
     quotes_results = await asyncio.gather(*(nav_cache.get_quote(code) for code in active_codes), return_exceptions=True)
     quotes = []
     for code, q in zip(active_codes, quotes_results):
@@ -96,7 +88,6 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
         else:
             quotes.append(q)
     quotes_map = dict(zip(active_codes, quotes))
-    logger.info("_get_holdings_summary: concurrent fetch of quotes completed, elapsed: %.3fs", time.time() - t_quotes_start)
 
     # 3. 得到各基金交易日，并发拉取近两日净值
     trade_days_map = {}
@@ -113,8 +104,6 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
         if current_trade_day > global_trade_day:
             global_trade_day = current_trade_day
 
-    t_navs_start = time.time()
-    logger.info("_get_holdings_summary: start concurrent fetch of nav histories")
     navs_results = await asyncio.gather(*(
         nav_cache.get_nav_history(code, days=2, expected_date=trade_days_map[code])
         for code in active_codes
@@ -129,7 +118,6 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
             navs_list.append(n)
             
     navs_map = dict(zip(active_codes, navs_list))
-    logger.info("_get_holdings_summary: concurrent fetch of nav histories completed, elapsed: %.3fs", time.time() - t_navs_start)
 
     # 4. 纯内存计算汇总及持仓列表组装
     for code in active_codes:
@@ -240,7 +228,6 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
 async def holdings_history(days: int = 30) -> dict:
     """计算最近 N 天的每日收益走势。"""
     t_start = time.time()
-    logger.info("holdings_history: start request for days=%d", days)
     from collections import defaultdict
 
     with get_conn() as conn:
@@ -259,22 +246,17 @@ async def holdings_history(days: int = 30) -> dict:
         
     dates = sorted([r["date"] for r in dates_result])
     if len(dates) < 2:
-        logger.info("holdings_history: too few dates, returning empty")
         return ok([])
-
-    logger.info("holdings_history: loaded metadata. Active funds: %d. History dates: %d. Elapsed: %.3fs", len(codes), len(dates), time.time() - t_start)
 
     nav_map = {code: {} for code in codes}
     with get_conn() as conn:
         for code in codes:
-            t_nav_start = time.time()
             rows = conn.execute(
                 "SELECT date, nav FROM nav_history WHERE fund_code = ? AND date >= ?",
                 (code, dates[0])
             ).fetchall()
             for r in rows:
                 nav_map[code][r["date"]] = r["nav"]
-            logger.info("holdings_history: loaded local nav for fund %s, records count: %d, elapsed: %.3fs", code, len(rows), time.time() - t_nav_start)
 
     txs_by_fund = defaultdict(list)
     for r in tx_rows:

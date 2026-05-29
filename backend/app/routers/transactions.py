@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import logging
-import time
 
 from fastapi import APIRouter
 
@@ -13,7 +11,6 @@ from ..response import BizError, ok
 from ..services import eastmoney, nav_cache
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
-logger = logging.getLogger("fund.transactions")
 
 
 @router.post("")
@@ -23,8 +20,6 @@ async def create_transaction(payload: TransactionIn) -> dict:
     幂等：如果带 client_id 且数据库已有同 client_id 的记录，直接返回旧记录、不重复插入。
     amount 和 shares 至少给一个，缺的那个用 nav 反推（暂不考虑卖出费用对 amount 的影响）。
     """
-    t0 = time.time()
-    logger.info("create_transaction: start payload=%s", payload)
     if payload.client_id:
         with get_conn() as conn:
             existing = conn.execute(
@@ -137,14 +132,11 @@ async def create_transaction(payload: TransactionIn) -> dict:
             "SELECT * FROM transactions WHERE id = ?", (new_id,)
         ).fetchone()
 
-    logger.info("create_transaction: completed, elapsed: %.3fs", time.time() - t0)
     return ok(_row_to_dict(row))
 
 
 @router.get("")
 async def list_transactions(fund_code: str | None = None) -> dict:
-    t0 = time.time()
-    logger.info("list_transactions: start fund_code=%s", fund_code)
     sql = "SELECT * FROM transactions"
     params: tuple = ()
     if fund_code:
@@ -154,29 +146,22 @@ async def list_transactions(fund_code: str | None = None) -> dict:
 
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
-    logger.info("list_transactions: completed, count: %d, elapsed: %.3fs", len(rows), time.time() - t0)
     return ok([_row_to_dict(r) for r in rows])
 
 
 @router.delete("/{tx_id}")
 async def delete_transaction(tx_id: int) -> dict:
-    t0 = time.time()
-    logger.info("delete_transaction: start tx_id=%d", tx_id)
     with get_conn() as conn:
         cur = conn.execute("DELETE FROM transactions WHERE id = ?", (tx_id,))
         if cur.rowcount == 0:
             raise BizError(4041, f"交易 {tx_id} 不存在")
-    logger.info("delete_transaction: completed, elapsed: %.3fs", time.time() - t0)
     return ok({"deleted": tx_id})
 
 
 @router.post("/sync_pending")
 async def sync_pending() -> dict:
     """手动触发待确认订单的同步补全。"""
-    t0 = time.time()
-    logger.info("sync_pending: start manual trigger")
     count = await nav_cache.sync_pending_transactions()
-    logger.info("sync_pending: completed, synced_count: %d, elapsed: %.3fs", count, time.time() - t0)
     return ok({"synced_count": count})
 
 def _row_to_dict(row) -> dict:
