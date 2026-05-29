@@ -16,4 +16,15 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vue-vendor': ['vue', 'vue-router', 'pinia'],
+          'echarts': ['echarts', 'vue-echarts'],
+          'element-plus': ['element-plus']
+        }
+      }
+    }
+  }
 })
