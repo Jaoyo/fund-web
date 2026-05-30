@@ -1,48 +1,51 @@
 <template>
-  <el-container class="app-container">
-    <!-- 顶部 header -->
-    <el-header v-if="!$route.meta.public" class="app-header">
-      <div class="brand">fund-web</div>
-      <!-- 桌面端菜单，在移动端通过 display: none 隐藏 -->
-      <el-menu mode="horizontal" :router="true" :default-active="$route.path" class="nav-menu desktop-menu">
-        <el-menu-item index="/">总览</el-menu-item>
-        <el-menu-item index="/transactions">交易</el-menu-item>
-        <el-menu-item index="/advice">建议</el-menu-item>
-      </el-menu>
-      <!-- 登出按钮 -->
-      <el-button text size="small" class="logout-btn" @click="handleLogout">登出</el-button>
-    </el-header>
-    
-    <el-main :class="{ 'no-padding': $route.meta.public }" class="app-main">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
-    </el-main>
+  <el-config-provider :locale="zhCn">
+    <el-container class="app-container">
+      <!-- 顶部 header -->
+      <el-header v-if="!$route.meta.public" class="app-header">
+        <div class="brand">fund-web</div>
+        <!-- 桌面端菜单，在移动端通过 display: none 隐藏 -->
+        <el-menu mode="horizontal" :router="true" :default-active="$route.path" class="nav-menu desktop-menu">
+          <el-menu-item index="/">总览</el-menu-item>
+          <el-menu-item index="/transactions">交易</el-menu-item>
+          <el-menu-item index="/advice">建议</el-menu-item>
+        </el-menu>
+        <!-- 登出按钮 -->
+        <el-button text size="small" class="logout-btn" @click="handleLogout">登出</el-button>
+      </el-header>
+      
+      <el-main :class="{ 'no-padding': $route.meta.public }" class="app-main">
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </el-main>
 
-    <!-- 移动端底部 TabBar，在桌面端通过 display: none 隐藏 -->
-    <div v-if="!$route.meta.public" class="mobile-tabbar">
-      <router-link to="/" class="tab-item" :class="{ active: $route.path === '/' }">
-        <el-icon><PieChart /></el-icon>
-        <span class="tab-label">总览</span>
-      </router-link>
-      <router-link to="/transactions" class="tab-item" :class="{ active: $route.path === '/transactions' }">
-        <el-icon><List /></el-icon>
-        <span class="tab-label">交易</span>
-      </router-link>
-      <router-link to="/advice" class="tab-item" :class="{ active: $route.path === '/advice' }">
-        <el-icon><Opportunity /></el-icon>
-        <span class="tab-label">建议</span>
-      </router-link>
-    </div>
-  </el-container>
+      <!-- 移动端底部 TabBar，在桌面端通过 display: none 隐藏 -->
+      <div v-if="!$route.meta.public" class="mobile-tabbar">
+        <router-link to="/" class="tab-item" :class="{ active: $route.path === '/' }">
+          <el-icon><PieChart /></el-icon>
+          <span class="tab-label">总览</span>
+        </router-link>
+        <router-link to="/transactions" class="tab-item" :class="{ active: $route.path === '/transactions' }">
+          <el-icon><List /></el-icon>
+          <span class="tab-label">交易</span>
+        </router-link>
+        <router-link to="/advice" class="tab-item" :class="{ active: $route.path === '/advice' }">
+          <el-icon><Opportunity /></el-icon>
+          <span class="tab-label">建议</span>
+        </router-link>
+      </div>
+    </el-container>
+  </el-config-provider>
 </template>
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { PieChart, List, Opportunity } from '@element-plus/icons-vue'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()

@@ -4,8 +4,14 @@
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import * as echarts from 'echarts'
+import { use } from 'echarts/core'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+import * as echarts from 'echarts/core'
 import type { NavRecord } from '@/types'
+
+use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 const props = defineProps<{ records: NavRecord[] }>()
 const chartRef = ref<HTMLDivElement | null>(null)
