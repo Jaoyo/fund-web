@@ -25,3 +25,15 @@ frontend/dist/
 # Env
 .env
 .env.local
+
+# Database
+backend/*.db
+backend/**/*.db.bak
+
+# Auto-generated Types
+frontend/auto-imports.d.ts
+frontend/components.d.ts
+
+# Misc
+design.md
+image.png
