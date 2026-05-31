@@ -5,7 +5,7 @@
       <span class="subtitle">跟踪持仓明细与今日预估收益</span>
     </div>
     
-    <ProfitSummary v-if="store.summary" :summary="store.summary" @toggle-chart="showChart = !showChart" />
+    <ProfitSummary v-if="store.summary" :summary="store.summary" @toggle-chart="handleToggleChart" />
     
     <ProfitChart v-if="store.history && store.history.length > 0 && showChart" :data="store.history" />
     
@@ -58,20 +58,27 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, nextTick } from 'vue'
+import { onMounted, onBeforeUnmount, ref, nextTick, defineAsyncComponent } from 'vue'
 import { Refresh, Rank } from '@element-plus/icons-vue'
 import { useHoldingsStore } from '@/stores/holdings'
 import { fundsApi } from '@/api/funds'
 import { ElMessage } from 'element-plus'
 import Sortable from 'sortablejs'
 import ProfitSummary from '@/components/ProfitSummary.vue'
-import ProfitChart from '@/components/ProfitChart.vue'
+const ProfitChart = defineAsyncComponent(() => import('@/components/ProfitChart.vue'))
 import HoldingCard from '@/components/HoldingCard.vue'
 
 const store = useHoldingsStore()
 
 const showChart = ref(false)
 const isSorting = ref(false)
+
+async function handleToggleChart() {
+  if (!showChart.value && store.history.length === 0) {
+    await store.loadHistory()
+  }
+  showChart.value = !showChart.value
+}
 const savingSort = ref(false)
 const listRef = ref<HTMLElement | null>(null)
 let sortableInst: Sortable | null = null

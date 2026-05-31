@@ -9,14 +9,45 @@ export const useHoldingsStore = defineStore('holdings', () => {
   const loading = ref(false)
   let timer: number | null = null
 
+  const historyLoading = ref(false)
+
   async function refresh() {
     loading.value = true
     try {
-      const [s, h] = await Promise.all([
-        holdingsApi.summary(),
-        holdingsApi.history(30)
-      ])
+      const pSummary = holdingsApi.summary()
+      let pHistory: Promise<any> | null = null
+
+      if (history.value.length > 0) {
+        pHistory = holdingsApi.history(30)
+      }
+
+      const [s, h] = await Promise.all([pSummary, pHistory])
       summary.value = s
+
+      if (h) {
+        if (s) {
+          const combined = h.filter((item: any) => item.date < s.trade_date)
+          combined.push({
+            date: s.trade_date,
+            profit: Number(s.today_profit.toFixed(2)),
+            cumulative_profit: Number(s.total_profit.toFixed(2))
+          })
+          history.value = combined
+        } else {
+          history.value = h
+        }
+      }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadHistory() {
+    if (history.value.length > 0 || historyLoading.value) return
+    historyLoading.value = true
+    try {
+      const h = await holdingsApi.history(30)
+      const s = summary.value
       if (s && h) {
         const combined = h.filter(item => item.date < s.trade_date)
         combined.push({
@@ -29,7 +60,7 @@ export const useHoldingsStore = defineStore('holdings', () => {
         history.value = h
       }
     } finally {
-      loading.value = false
+      historyLoading.value = false
     }
   }
 
@@ -46,5 +77,5 @@ export const useHoldingsStore = defineStore('holdings', () => {
     }
   }
 
-  return { summary, history, loading, refresh, startPolling, stopPolling }
+  return { summary, history, loading, historyLoading, refresh, loadHistory, startPolling, stopPolling }
 })
