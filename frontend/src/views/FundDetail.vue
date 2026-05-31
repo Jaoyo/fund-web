@@ -48,7 +48,7 @@
           </div>
           <div class="metric-box" v-if="advice.ma_deviation !== null">
             <span class="label">250日均线偏离</span>
-            <span class="val" :class="advice.ma_deviation >= 0.15 ? 'profit-glow-down' : (advice.ma_deviation <= -0.10 ? 'profit-glow-up' : '')">
+            <span class="val" :class="advice.ma_deviation >= 0.15 ? 'profit-glow-up' : (advice.ma_deviation <= -0.10 ? 'profit-glow-down' : '')">
               {{ (advice.ma_deviation >= 0 ? '+' : '') + formatPercent(advice.ma_deviation) }}
             </span>
           </div>

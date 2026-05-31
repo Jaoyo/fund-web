@@ -17,7 +17,6 @@ async def list_advice(days: int = 750) -> dict:
             r["code"]
             for r in conn.execute(
                 "SELECT f.code FROM funds f "
-                "JOIN (SELECT DISTINCT fund_code FROM transactions) t ON f.code = t.fund_code "
                 "ORDER BY f.sort_order ASC, f.code ASC"
             ).fetchall()
         ]

@@ -1,13 +1,43 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter
 
 from ..db import get_conn
-from ..models.fund import FundDetail, FundSortRequest
+from ..models.fund import FundAddRequest, FundDetail, FundSortRequest
 from ..response import BizError, ok
 from ..services import eastmoney, nav_cache
 
 router = APIRouter(prefix="/funds", tags=["funds"])
+
+@router.post("")
+async def add_fund(payload: FundAddRequest) -> dict:
+    """添加自选基金。"""
+    try:
+        info = await eastmoney.fetch_fund_info(payload.code)
+    except BizError:
+        raise
+    except Exception as e:
+        raise BizError(5002, f"获取基金信息失败: {e}")
+
+    now_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO funds(code, name, updated_at) VALUES (?, ?, ?)",
+            (payload.code, info.name, now_str)
+        )
+    return ok({"code": payload.code, "name": info.name})
+
+@router.delete("/{code}")
+async def remove_fund(code: str) -> dict:
+    """删除自选基金。如果有交易记录则不许删除。"""
+    with get_conn() as conn:
+        tx_count = conn.execute("SELECT COUNT(*) as c FROM transactions WHERE fund_code = ?", (code,)).fetchone()["c"]
+        if tx_count > 0:
+            raise BizError(4003, "该基金存在交易记录，无法直接删除，请先删除交易记录。")
+        conn.execute("DELETE FROM funds WHERE code = ?", (code,))
+    return ok({"code": code})
 
 @router.put("/sort")
 async def update_sort(payload: FundSortRequest) -> dict:

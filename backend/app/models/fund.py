@@ -36,5 +36,9 @@ class FundDetail(BaseModel):
     quote: Optional[Quote] = None
 
 
+class FundAddRequest(BaseModel):
+    code: str = Field(..., description="基金代码，6 位")
+
+
 class FundSortRequest(BaseModel):
     codes: list[str] = Field(..., description="排好序的基金代码列表")

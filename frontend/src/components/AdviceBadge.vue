@@ -50,26 +50,26 @@ defineProps<{ signal: AdviceSignal }>()
   opacity: 0.9;
 }
 
-/* buy (买入建议 - 币安红) */
+/* buy (买入建议 - 变更为绿色) */
 .buy {
-  background: rgba(246, 70, 93, 0.08) !important;
-  color: #f6465d !important;
-  border-color: rgba(246, 70, 93, 0.2) !important;
-}
-.buy .indicator-dot {
-  background-color: #f6465d;
-  box-shadow: 0 0 6px #f6465d;
-}
-
-/* sell (卖出建议 - 币安绿) */
-.sell {
   background: rgba(14, 203, 129, 0.08) !important;
   color: #0ecb81 !important;
   border-color: rgba(14, 203, 129, 0.2) !important;
 }
-.sell .indicator-dot {
+.buy .indicator-dot {
   background-color: #0ecb81;
   box-shadow: 0 0 6px #0ecb81;
+}
+
+/* sell (卖出建议 - 变更为红色) */
+.sell {
+  background: rgba(246, 70, 93, 0.08) !important;
+  color: #f6465d !important;
+  border-color: rgba(246, 70, 93, 0.2) !important;
+}
+.sell .indicator-dot {
+  background-color: #f6465d;
+  box-shadow: 0 0 6px #f6465d;
 }
 
 /* watch (预警关注 - 琥珀黄) */

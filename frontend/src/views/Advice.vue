@@ -6,6 +6,11 @@
         <span class="desc">基于历史分位、{{ days >= 250 ? '250日' : days + '日' }}均线偏离度及持仓盈亏自动运算</span>
       </div>
       <div class="actions-section">
+        <el-input v-model="newFundCode" placeholder="6位代码加自选" class="add-input" maxlength="6" :disabled="adding">
+          <template #append>
+            <el-button :loading="adding" @click="addFund" :icon="Plus"></el-button>
+          </template>
+        </el-input>
         <el-radio-group v-model="days" size="small" @change="load" class="days-radio">
           <el-radio-button :value="125">半年</el-radio-button>
           <el-radio-button :value="250">1年</el-radio-button>
@@ -23,13 +28,23 @@
         </el-button>
       </div>
     </div>
-    <el-empty v-if="!loading && list.length === 0" description="暂无策略建议，请先录入基金交易流水" />
+    <div class="filter-section" v-if="list.length > 0">
+      <el-radio-group v-model="filterType" size="small" class="filter-radio">
+        <el-radio-button value="all">全部</el-radio-button>
+        <el-radio-button value="held">持仓</el-radio-button>
+        <el-radio-button value="watchlist">自选</el-radio-button>
+      </el-radio-group>
+    </div>
+    <el-empty v-if="!loading && filteredList.length === 0" description="暂无符合条件的基金" />
     
-    <el-card v-for="item in list" :key="item.fund_code" class="advice-card" shadow="hover">
+    <el-card v-for="item in filteredList" :key="item.fund_code" class="advice-card" shadow="hover">
       <div class="card-top">
         <div class="card-header" @click="$router.push(`/fund/${item.fund_code}`)">
           <span class="name">{{ item.fund_name }}</span>
           <span class="code font-number">{{ item.fund_code }}</span>
+          <el-button v-if="item.profit_rate === null" class="delete-btn" link type="danger" @click.stop="removeFund(item.fund_code)">
+            <el-icon><Delete /></el-icon>
+          </el-button>
         </div>
         <div class="signals">
           <AdviceBadge v-for="(s, i) in item.signals" :key="i" :signal="s" />
@@ -74,9 +89,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { onMounted, ref, computed } from 'vue'
+import { Refresh, Plus, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { adviceApi } from '@/api/advice'
+import { fundsApi } from '@/api/funds'
 import { formatPercent } from '@/utils/format'
 import AdviceBadge from '@/components/AdviceBadge.vue'
 import type { FundAdvice } from '@/types'
@@ -84,6 +101,19 @@ import type { FundAdvice } from '@/types'
 const list = ref<FundAdvice[]>([])
 const loading = ref(false)
 const days = ref(750)
+const newFundCode = ref('')
+const adding = ref(false)
+
+const filterType = ref('all')
+
+const filteredList = computed(() => {
+  if (filterType.value === 'held') {
+    return list.value.filter(item => item.profit_rate !== null)
+  } else if (filterType.value === 'watchlist') {
+    return list.value.filter(item => item.profit_rate === null)
+  }
+  return list.value
+})
 
 async function load() {
   loading.value = true
@@ -96,8 +126,39 @@ async function load() {
 
 function getDeviationClass(dev: number | null) {
   if (dev === null) return 'muted'
-  // 红涨绿跌偏离度颜色
-  return dev >= 0.15 ? 'profit-glow-down' : (dev <= -0.10 ? 'profit-glow-up' : '')
+  // 低位绿，高位红
+  return dev >= 0.15 ? 'profit-glow-up' : (dev <= -0.10 ? 'profit-glow-down' : '')
+}
+
+async function addFund() {
+  if (!newFundCode.value || newFundCode.value.length !== 6) {
+    ElMessage.warning('请输入6位基金代码')
+    return
+  }
+  adding.value = true
+  try {
+    await fundsApi.addWatchlist(newFundCode.value)
+    ElMessage.success('已添加到自选')
+    newFundCode.value = ''
+    await load()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '添加失败')
+  } finally {
+    adding.value = false
+  }
+}
+
+async function removeFund(code: string) {
+  try {
+    await ElMessageBox.confirm('确认删除该自选基金吗？', '提示', { type: 'warning' })
+    await fundsApi.removeWatchlist(code)
+    ElMessage.success('已删除')
+    await load()
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.response?.data?.message || '删除失败')
+    }
+  }
 }
 
 onMounted(load)
@@ -117,10 +178,18 @@ onMounted(load)
   font-size: 13px;
   color: #707a8a;
 }
+.filter-section {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+}
 .actions-section {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+.add-input {
+  width: 200px;
 }
 .advice-card { margin-bottom: 16px; padding: 12px 16px; background-color: #1e2329 !important; border: 1px solid #2b3139 !important; }
 .card-top {
@@ -141,6 +210,7 @@ onMounted(load)
 }
 .name { font-weight: 700; font-size: 16px; color: #ffffff; transition: color 0.2s ease; }
 .code { color: #929aa5; font-size: 12px; }
+.delete-btn { margin-left: auto; padding-left: 8px; }
 .signals { display: flex; flex-wrap: wrap; }
 
 .metrics-grid {
@@ -174,11 +244,11 @@ onMounted(load)
   margin-top: 8px;
   width: 100%;
 }
-/* 红涨绿跌渐变条：低位买为红(#f6465d)，高位卖为绿(#0ecb81) */
+/* 低位买为绿(#0ecb81)，高位卖为红(#f6465d) */
 .indicator-bar-bg {
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(to right, #f6465d 0%, rgba(255,255,255,0.12) 50%, #0ecb81 100%);
+  background: linear-gradient(to right, #0ecb81 0%, rgba(255,255,255,0.12) 50%, #f6465d 100%);
   width: 100%;
 }
 .indicator-pointer {
@@ -200,8 +270,8 @@ onMounted(load)
   margin-top: 6px;
   font-weight: 500;
 }
-.buy-label { color: #f6465d; }
-.sell-label { color: #0ecb81; }
+.buy-label { color: #0ecb81; }
+.sell-label { color: #f6465d; }
 
 /* 手机端响应式适配 */
 @media (max-width: 768px) {
