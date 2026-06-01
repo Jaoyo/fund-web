@@ -3,9 +3,15 @@
     <div class="header-section">
       <div class="title-row">
         <div class="title">总资产市值 (元)</div>
-        <div class="toggle-chart-btn" @click="$emit('toggleChart')">
-          <span>近30天走势</span>
-          <el-icon><DataLine /></el-icon>
+        <div class="toggle-btns">
+          <div class="toggle-chart-btn" :class="{ active: showChart }" @click="$emit('toggleChart')">
+            <span>近30天走势</span>
+            <el-icon><DataLine /></el-icon>
+          </div>
+          <div class="toggle-chart-btn" :class="{ active: showContributionChart }" @click="$emit('toggleContributionChart')">
+            <span>今日贡献度</span>
+            <el-icon><PieChart /></el-icon>
+          </div>
         </div>
       </div>
       <div class="amount-row">
@@ -84,16 +90,24 @@
 
 <script setup lang="ts">
 import { formatMoney, formatPercent } from '@/utils/format'
-import { DataLine } from '@element-plus/icons-vue'
+import { DataLine, PieChart } from '@element-plus/icons-vue'
 import type { HoldingsSummary } from '@/types'
 
-defineProps<{ summary: HoldingsSummary }>()
-defineEmits<{ (e: 'toggleChart'): void }>()
+defineProps<{ 
+  summary: HoldingsSummary
+  showChart?: boolean
+  showContributionChart?: boolean
+}>()
+defineEmits<{ 
+  (e: 'toggleChart'): void
+  (e: 'toggleContributionChart'): void
+}>()
 </script>
 
 <style scoped>
 .profit-summary-card {
   padding: 20px 24px;
+  margin-bottom: 24px;
   background-color: #1e2329 !important;
   border: 1px solid #2b3139 !important;
   position: relative;
@@ -107,6 +121,10 @@ defineEmits<{ (e: 'toggleChart'): void }>()
   align-items: center;
 }
 .title { color: #929aa5; font-size: 13px; font-weight: 500; }
+.toggle-btns {
+  display: flex;
+  gap: 8px;
+}
 .toggle-chart-btn {
   display: flex;
   align-items: center;
@@ -120,7 +138,8 @@ defineEmits<{ (e: 'toggleChart'): void }>()
   border-radius: 4px;
   border: 1px solid #2b3139;
 }
-.toggle-chart-btn:hover {
+.toggle-chart-btn:hover,
+.toggle-chart-btn.active {
   color: #fcd535;
   border-color: #707a8a;
   background-color: #3a404a;
