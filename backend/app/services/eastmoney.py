@@ -29,6 +29,7 @@ logger = logging.getLogger("fund.eastmoney")
 _client: httpx.AsyncClient | None = None
 _SEMAPHORE = asyncio.Semaphore(5)
 _QUOTE_TIMEOUT = httpx.Timeout(connect=3.0, read=3.0, write=3.0, pool=1.0)
+_NAV_TIMEOUT = httpx.Timeout(connect=3.0, read=5.0, write=3.0, pool=1.0)
 
 
 def get_client() -> httpx.AsyncClient:
@@ -120,7 +121,7 @@ async def fetch_nav_history(
             t_page_0 = time.time()
             try:
                 async with _SEMAPHORE:
-                    resp = await client.get(EASTMONEY_NAV_URL, params=params)
+                    resp = await client.get(EASTMONEY_NAV_URL, params=params, timeout=_NAV_TIMEOUT)
                 resp.raise_for_status()
                 break
             except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as ex:

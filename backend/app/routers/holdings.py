@@ -106,7 +106,7 @@ async def _get_holdings_summary() -> tuple[HoldingsSummary, str]:
             global_trade_day = current_trade_day
 
     navs_results = await asyncio.gather(*(
-        nav_cache.get_nav_history(code, days=2, expected_date=trade_days_map[code])
+        nav_cache.get_nav_history(code, days=2, expected_date=trade_days_map[code], background_fetch=True)
         for code in active_codes
     ), return_exceptions=True)
     
