@@ -331,12 +331,18 @@ onMounted(() => {
     padding: 0 4px;
     border-radius: 4px;
   }
+  .col-prop {
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+  }
   .prop-text {
-    width: 40px;
+    width: auto;
     font-size: 12px;
   }
   .progress-bar-bg {
-    width: 40px;
+    width: 48px;
   }
 }
 </style>
