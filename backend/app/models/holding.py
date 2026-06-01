@@ -68,3 +68,24 @@ class HoldingsSummary(BaseModel):
     update_status: Literal["estimated", "updating", "updated"] = "estimated"
     positions: list[Position]
     trade_date: str = Field(..., description="当前最新交易日")
+
+
+class FundStockHolding(BaseModel):
+    """基金持有的单只股票。"""
+    stock_code: str
+    stock_name: str
+    proportion: float = Field(..., description="占净值比例（百分比，如 9.5 表示 9.5%）")
+
+
+class FundContribution(BaseModel):
+    fund_code: str
+    fund_name: str
+    market_value: float
+
+class UserStockPosition(BaseModel):
+    """穿透计算后，用户个人账户持有的单只重仓股。"""
+    stock_code: str
+    stock_name: str
+    total_market_value: float = Field(..., description="穿透算出的个人持仓总市值")
+    proportion: float = Field(..., description="占个人总股票/基金总资产的比例（百分比，如 15.2 表示 15.2%）")
+    contributing_funds: list[FundContribution] = []

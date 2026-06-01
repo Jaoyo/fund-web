@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS advice_log (
     detail      TEXT,
     created_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS api_cache (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+);
 """
 
 

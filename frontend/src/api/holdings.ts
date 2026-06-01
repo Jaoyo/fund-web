@@ -4,6 +4,7 @@ import type { HoldingsSummary, Transaction, TransactionIn, HoldingHistory } from
 export const holdingsApi = {
   summary: () => apiGet<HoldingsSummary>('/holdings'),
   history: (days = 30) => apiGet<HoldingHistory[]>('/holdings/history', { days }),
+  heavyWeightStocks: () => apiGet<any[]>('/holdings/stocks'),
 }
 
 export const transactionsApi = {

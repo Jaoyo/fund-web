@@ -10,6 +10,8 @@ export const useHoldingsStore = defineStore('holdings', () => {
   let timer: number | null = null
 
   const historyLoading = ref(false)
+  const heavyStocks = ref<any[]>([])
+  const heavyStocksLoading = ref(false)
 
   async function refresh() {
     loading.value = true
@@ -64,6 +66,15 @@ export const useHoldingsStore = defineStore('holdings', () => {
     }
   }
 
+  async function loadHeavyStocks() {
+    heavyStocksLoading.value = true
+    try {
+      heavyStocks.value = await holdingsApi.heavyWeightStocks()
+    } finally {
+      heavyStocksLoading.value = false
+    }
+  }
+
   function startPolling(intervalMs = 60_000) {
     stopPolling()
     refresh()
@@ -77,5 +88,5 @@ export const useHoldingsStore = defineStore('holdings', () => {
     }
   }
 
-  return { summary, history, loading, historyLoading, refresh, loadHistory, startPolling, stopPolling }
+  return { summary, history, loading, historyLoading, heavyStocks, heavyStocksLoading, refresh, loadHistory, loadHeavyStocks, startPolling, stopPolling }
 })

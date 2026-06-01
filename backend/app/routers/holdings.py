@@ -329,3 +329,85 @@ async def holdings_history(days: int = 30) -> dict:
 
     logger.info("holdings_history: history generation completed, history points: %d, total elapsed: %.3fs", len(history), time.time() - t_start)
     return ok(history)
+
+
+@router.get("/stocks")
+async def heavy_weight_stocks() -> dict:
+    """穿透计算用户个人重仓股。"""
+    t_start = time.time()
+    summary, _ = await _get_holdings_summary()
+    
+    # 获取有效持仓的基金
+    active_funds = [p for p in summary.positions if p.market_value > 1e-6]
+    
+    if not active_funds:
+        return ok([])
+
+    from ..services.eastmoney import fetch_fund_stock_holdings
+    import asyncio
+    
+    # 并发抓取各基金的重仓股
+    tasks = [fetch_fund_stock_holdings(p.fund_code) for p in active_funds]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    stock_agg = {}
+    total_assets = summary.total_market_value
+    
+    for p, stocks_res in zip(active_funds, results):
+        if isinstance(stocks_res, Exception):
+            logger.error("heavy_weight_stocks: failed to fetch stocks for %s: %s", p.fund_code, stocks_res)
+            continue
+            
+        for s in stocks_res:
+            code = s["stock_code"]
+            name = s["stock_name"]
+            prop = s["proportion"]
+            
+            # 计算该股票在个人账户里的等效市值
+            equiv_market = p.market_value * (prop / 100.0)
+            
+            if code not in stock_agg:
+                stock_agg[code] = {
+                    "stock_code": code,
+                    "stock_name": name,
+                    "total_market_value": equiv_market,
+                    "contributing_funds": []
+                }
+            else:
+                stock_agg[code]["total_market_value"] += equiv_market
+                
+            stock_agg[code]["contributing_funds"].append({
+                "fund_code": p.fund_code,
+                "fund_name": p.fund_name,
+                "market_value": equiv_market
+            })
+                
+    # 转换为列表，计算个人总资产占比，并排序
+    from ..models.holding import UserStockPosition, FundContribution
+    
+    final_positions = []
+    for code, data in stock_agg.items():
+        market_val = data["total_market_value"]
+        overall_prop = (market_val / total_assets * 100.0) if total_assets > 0 else 0
+        
+        # 对贡献基金按市值降序排序
+        sorted_funds = sorted(data["contributing_funds"], key=lambda x: x["market_value"], reverse=True)
+        contribs = [FundContribution(**f) for f in sorted_funds]
+        
+        final_positions.append(
+            UserStockPosition(
+                stock_code=code,
+                stock_name=data["stock_name"],
+                total_market_value=round(market_val, 2),
+                proportion=round(overall_prop, 4),
+                contributing_funds=contribs
+            )
+        )
+        
+    final_positions.sort(key=lambda x: x.total_market_value, reverse=True)
+    
+    # 只返回前 50 只重仓股
+    top_positions = final_positions[:50]
+    
+    logger.info("heavy_weight_stocks: calculation completed. Total stocks: %d. Total elapsed: %.3fs", len(top_positions), time.time() - t_start)
+    return ok([p.model_dump() for p in top_positions])

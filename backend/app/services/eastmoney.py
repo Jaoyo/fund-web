@@ -216,3 +216,90 @@ def _strip_percent(v) -> Optional[str]:
         return None
     s = str(v).strip().rstrip("%")
     return s or None
+
+async def fetch_fund_stock_holdings(code: str, depth: int = 0, default_proportion: float = 100.0) -> list[dict]:
+    """
+    抓取基金的重仓股（按比例折算）。
+    如果遇到 FOF / ETF 联接基金，会递归抓取其底层的基金持仓，最多向下穿透 2 层。
+    """
+    if depth > 2:
+        return []
+
+    from ..db import get_conn
+    from datetime import datetime, timedelta, timezone
+
+    # 1. 尝试读缓存 (30天过期)
+    cache_key = f"holdings_{code}"
+    with get_conn() as conn:
+        row = conn.execute("SELECT value, updated_at FROM api_cache WHERE key = ?", (cache_key,)).fetchone()
+        if row:
+            updated_at_dt = datetime.fromisoformat(row["updated_at"])
+            if datetime.now(timezone.utc) - updated_at_dt < timedelta(days=30):
+                return json.loads(row["value"])
+
+    # 2. 缓存未命中或已过期，发请求拉取
+    url = f"https://fundmobapi.eastmoney.com/FundMNewApi/FundMNInverstPosition?FCODE={code}&deviceid=Wap&plat=Wap&product=EFund&version=2.0.0"
+    try:
+        client = get_client()
+        async with _SEMAPHORE:
+            resp = await client.get(url, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("Success"):
+            logger.warning("fetch_fund_stock_holdings: failed to fetch for %s", code)
+            return []
+            
+        datas = data.get("Datas", {})
+    except Exception as e:
+        logger.error("fetch_fund_stock_holdings: network error for %s: %s", code, e)
+        return []
+
+    stocks_result = []
+
+    # 3. 处理普通股票持仓
+    for s in datas.get("fundStocks") or []:
+        proportion = _to_float(s.get("JZBL"))
+        if proportion is None:
+            continue
+        stocks_result.append({
+            "stock_code": s.get("GPDM"),
+            "stock_name": s.get("GPJC"),
+            "proportion": (proportion * default_proportion) / 100.0
+        })
+
+    # 4. 处理 FOF 持有其他基金的递归穿透
+    for f in datas.get("fundfofs") or []:
+        f_code = f.get("TZJJDM")
+        f_prop = _to_float(f.get("ZJZBL"))
+        if f_code and f_prop:
+            actual_prop = (f_prop * default_proportion) / 100.0
+            sub_stocks = await fetch_fund_stock_holdings(f_code, depth + 1, actual_prop)
+            stocks_result.extend(sub_stocks)
+            
+    # 5. 处理 ETF 联接基金（只有 ETFCODE，没有确切占比的情况，按100%穿透）
+    etf_code = datas.get("ETFCODE")
+    if etf_code and not (datas.get("fundStocks") or datas.get("fundfofs")):
+        sub_stocks = await fetch_fund_stock_holdings(etf_code, depth + 1, default_proportion)
+        stocks_result.extend(sub_stocks)
+
+    # 聚合重复的股票（可能在多个 FOF 里重复持仓）
+    agg_map = {}
+    for s in stocks_result:
+        k = s["stock_code"]
+        if k not in agg_map:
+            agg_map[k] = s
+        else:
+            agg_map[k]["proportion"] += s["proportion"]
+            
+    final_stocks = list(agg_map.values())
+
+    # 6. 写入缓存
+    if final_stocks:
+        now_str = datetime.now(timezone.utc).isoformat()
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO api_cache (key, value, updated_at) VALUES (?, ?, ?)",
+                (cache_key, json.dumps(final_stocks), now_str)
+            )
+
+    return final_stocks

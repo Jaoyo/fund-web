@@ -3,16 +3,6 @@
     <div class="header-section">
       <div class="title-row">
         <div class="title">总资产市值 (元)</div>
-        <div class="toggle-btns">
-          <div class="toggle-chart-btn" :class="{ active: showChart }" @click="$emit('toggleChart')">
-            <span>近30天走势</span>
-            <el-icon><DataLine /></el-icon>
-          </div>
-          <div class="toggle-chart-btn" :class="{ active: showContributionChart }" @click="$emit('toggleContributionChart')">
-            <span>今日贡献度</span>
-            <el-icon><PieChart /></el-icon>
-          </div>
-        </div>
       </div>
       <div class="amount-row">
         <div class="amount font-number">¥{{ formatMoney(summary.total_market_value) }}</div>
@@ -90,17 +80,10 @@
 
 <script setup lang="ts">
 import { formatMoney, formatPercent } from '@/utils/format'
-import { DataLine, PieChart } from '@element-plus/icons-vue'
 import type { HoldingsSummary } from '@/types'
 
 defineProps<{ 
   summary: HoldingsSummary
-  showChart?: boolean
-  showContributionChart?: boolean
-}>()
-defineEmits<{ 
-  (e: 'toggleChart'): void
-  (e: 'toggleContributionChart'): void
 }>()
 </script>
 
@@ -121,29 +104,6 @@ defineEmits<{
   align-items: center;
 }
 .title { color: #929aa5; font-size: 13px; font-weight: 500; }
-.toggle-btns {
-  display: flex;
-  gap: 8px;
-}
-.toggle-chart-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #929aa5;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background-color: #2b3139;
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid #2b3139;
-}
-.toggle-chart-btn:hover,
-.toggle-chart-btn.active {
-  color: #fcd535;
-  border-color: #707a8a;
-  background-color: #3a404a;
-}
 
 /* 总资产行 */
 .amount-row {

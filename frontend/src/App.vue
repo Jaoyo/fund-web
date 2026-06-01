@@ -11,6 +11,7 @@
         <el-menu mode="horizontal" :router="true" :default-active="$route.path" class="nav-menu desktop-menu">
           <el-menu-item index="/">总览</el-menu-item>
           <el-menu-item index="/transactions">交易</el-menu-item>
+          <el-menu-item index="/analysis">分析</el-menu-item>
           <el-menu-item index="/advice">建议</el-menu-item>
         </el-menu>
         <!-- 登出按钮 -->
@@ -35,6 +36,10 @@
           <el-icon><List /></el-icon>
           <span class="tab-label">交易</span>
         </router-link>
+        <router-link to="/analysis" class="tab-item" :class="{ active: $route.path === '/analysis' }">
+          <el-icon><DataAnalysis /></el-icon>
+          <span class="tab-label">分析</span>
+        </router-link>
         <router-link to="/advice" class="tab-item" :class="{ active: $route.path === '/advice' }">
           <el-icon><Opportunity /></el-icon>
           <span class="tab-label">建议</span>
@@ -47,7 +52,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { PieChart, List, Opportunity, TrendCharts } from '@element-plus/icons-vue'
+import { PieChart, List, Opportunity, TrendCharts, DataAnalysis } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { useAuthStore } from '@/stores/auth'
 

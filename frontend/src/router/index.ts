@@ -7,6 +7,7 @@ const router = createRouter({
   routes: [
     { path: '/', name: 'dashboard', component: () => import('@/views/Dashboard.vue') },
     { path: '/transactions', name: 'transactions', component: () => import('@/views/Transactions.vue') },
+    { path: '/analysis', name: 'analysis', component: () => import('@/views/Analysis.vue') },
     { path: '/advice', name: 'advice', component: () => import('@/views/Advice.vue') },
     { path: '/fund/:code', name: 'fund-detail', component: () => import('@/views/FundDetail.vue'), props: true },
     { path: '/login', name: 'login', component: () => import('@/views/Login.vue'), meta: { public: true } },
