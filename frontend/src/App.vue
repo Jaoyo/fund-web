@@ -3,7 +3,10 @@
     <el-container class="app-container">
       <!-- 顶部 header -->
       <el-header v-if="!$route.meta.public" class="app-header">
-        <div class="brand">fund-web</div>
+        <div class="brand">
+          <el-icon class="brand-icon"><TrendCharts /></el-icon>
+          <span class="brand-text">AlphaFi</span>
+        </div>
         <!-- 桌面端菜单，在移动端通过 display: none 隐藏 -->
         <el-menu mode="horizontal" :router="true" :default-active="$route.path" class="nav-menu desktop-menu">
           <el-menu-item index="/">总览</el-menu-item>
@@ -44,7 +47,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { PieChart, List, Opportunity } from '@element-plus/icons-vue'
+import { PieChart, List, Opportunity, TrendCharts } from '@element-plus/icons-vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { useAuthStore } from '@/stores/auth'
 
@@ -69,10 +72,16 @@ html, body, #app { height: 100%; margin: 0; background-color: #0b0e11; }
   height: 60px !important;
 }
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 800;
   font-size: 20px;
   color: #fcd535 !important; /* 币安黄 */
   letter-spacing: -0.5px;
+}
+.brand-icon {
+  font-size: 22px;
 }
 .nav-menu {
   flex: 1;

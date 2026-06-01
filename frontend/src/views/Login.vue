@@ -2,7 +2,10 @@
   <div class="login-page">
     <div class="login-card">
       <div class="brand-block">
-        <div class="brand">fund-web</div>
+        <div class="brand">
+          <el-icon class="brand-icon"><TrendCharts /></el-icon>
+          <span class="brand-text">AlphaFi</span>
+        </div>
         <div class="subtitle">输入访问令牌以继续</div>
       </div>
       <el-input
@@ -33,6 +36,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { TrendCharts } from '@element-plus/icons-vue'
 import { apiGet } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
@@ -98,10 +102,17 @@ async function handleLogin() {
   margin-bottom: 6px;
 }
 .brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-weight: 800;
   font-size: 26px;
   letter-spacing: -0.5px;
   color: #fcd535;
+}
+.brand-icon {
+  font-size: 28px;
 }
 .subtitle {
   font-size: 13px;
