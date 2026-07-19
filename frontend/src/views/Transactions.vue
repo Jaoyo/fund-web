@@ -69,10 +69,16 @@
           </template>
         </el-row>
         
-        <div v-if="quoteInfo && form.type !== 'import'" class="quote-info">
-          <span>实时预估净值：<strong :class="quoteInfo.estimated_growth && quoteInfo.estimated_growth > 0 ? 'text-red font-number' : 'text-green font-number'">{{ quoteInfo.estimated_nav?.toFixed(4) || '-' }}</strong></span>
-          <span style="margin-left: 16px;">预估涨跌：<strong :class="quoteInfo.estimated_growth && quoteInfo.estimated_growth > 0 ? 'text-red font-number' : 'text-green font-number'">{{ quoteInfo.estimated_growth !== null && quoteInfo.estimated_growth !== undefined ? (quoteInfo.estimated_growth > 0 ? '+' : '') + quoteInfo.estimated_growth.toFixed(2) + '%' : '-' }}</strong></span>
-          <span class="update-time">更新时间: {{ quoteInfo.estimated_time || '-' }}</span>
+        <div v-if="fundInfo" class="quote-info">
+          <div style="font-size: 14px; margin-bottom: 2px; color: #eaecef;">
+            基金名称：<strong style="color: #ffffff;">{{ fundInfo.name }}</strong>
+            <span style="margin-left: 8px; color: #707a8a; font-size: 12px;">({{ fundInfo.code }})</span>
+          </div>
+          <div v-if="quoteInfo && form.type !== 'import'" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #3b424c;">
+            <span>实时预估净值：<strong :class="quoteInfo.estimated_growth && quoteInfo.estimated_growth > 0 ? 'text-red font-number' : 'text-green font-number'">{{ quoteInfo.estimated_nav?.toFixed(4) || '-' }}</strong></span>
+            <span style="margin-left: 16px;">预估涨跌：<strong :class="quoteInfo.estimated_growth && quoteInfo.estimated_growth > 0 ? 'text-red font-number' : 'text-green font-number'">{{ quoteInfo.estimated_growth !== null && quoteInfo.estimated_growth !== undefined ? (quoteInfo.estimated_growth > 0 ? '+' : '') + quoteInfo.estimated_growth.toFixed(2) + '%' : '-' }}</strong></span>
+            <span class="update-time">更新时间: {{ quoteInfo.estimated_time || '-' }}</span>
+          </div>
         </div>
         <el-form-item label="交易备注">
           <el-input v-model="form.note" placeholder="选填，如：定投、止盈、低估买入等" />
@@ -131,14 +137,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, reactive, ref } from 'vue'
+import { onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { transactionsApi } from '@/api/holdings'
 import { fundsApi } from '@/api/funds'
 import { useHoldingsStore } from '@/stores/holdings'
-import type { Transaction, TransactionIn, Quote } from '@/types'
+import type { Transaction, TransactionIn, Quote, Fund } from '@/types'
 
 const form = reactive<TransactionIn & { fee: number }>({
   fund_code: '',
@@ -156,6 +162,7 @@ const form = reactive<TransactionIn & { fee: number }>({
 const list = ref<Transaction[]>([])
 const submitting = ref(false)
 const syncing = ref(false)
+const fundInfo = ref<Fund | null>(null)
 const quoteInfo = ref<Quote | null>(null)
 const store = useHoldingsStore()
 
@@ -167,15 +174,28 @@ function checkMobile() {
 
 async function fetchQuote() {
   if (!form.fund_code || form.fund_code.length !== 6) {
+    fundInfo.value = null
     quoteInfo.value = null
     return
   }
   try {
-    quoteInfo.value = await fundsApi.quote(form.fund_code)
+    const detail = await fundsApi.detail(form.fund_code)
+    fundInfo.value = detail.fund
+    quoteInfo.value = detail.quote
+    if (form.type === 'import' && detail.fund.name) {
+      form.fund_name = detail.fund.name
+    }
   } catch (e) {
+    fundInfo.value = null
     quoteInfo.value = null
   }
 }
+
+watch(() => form.type, (newType) => {
+  if (newType === 'import' && fundInfo.value) {
+    form.fund_name = fundInfo.value.name
+  }
+})
 
 async function loadList() {
   list.value = await transactionsApi.list()
@@ -210,6 +230,8 @@ async function submit() {
     form.fund_name = ''
     form.settlement_days = 1
     form.note = ''
+    fundInfo.value = null
+    quoteInfo.value = null
     await loadList()
     await store.refresh()
   } finally {

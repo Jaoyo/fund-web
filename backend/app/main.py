@@ -25,11 +25,38 @@ from .tasks.scheduler import start_scheduler, stop_scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+    from logging.handlers import RotatingFileHandler
+    from .config import BASE_DIR
+    
+    log_dir = BASE_DIR / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "app.log"
+
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
+        encoding="utf-8",
     )
+    file_handler.setFormatter(logging.Formatter(
+        fmt="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    for h in list(root_logger.handlers):
+        root_logger.removeHandler(h)
+    root_logger.addHandler(file_handler)
+
+    # Redirect uvicorn loggers to the file handler and remove console printing
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        ul = logging.getLogger(logger_name)
+        for h in list(ul.handlers):
+            ul.removeHandler(h)
+        ul.addHandler(file_handler)
+        ul.propagate = False
+
     init_db()
     start_scheduler()
     yield
